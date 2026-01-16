@@ -1,0 +1,26 @@
+{
+  "name": "supernote-viewer",
+  "version": "1.0.0",
+  "description": "Simple Supernote .note file viewer for Obsidian",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+  },
+  "keywords": [
+    "obsidian",
+    "supernote"
+  ],
+  "author": "Kashif",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.19.30",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.19.12",
+    "obsidian": "^1.11.4",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "pako": "^2.1.0"
+  }
+}

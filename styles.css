@@ -1,0 +1,77 @@
+/* Supernote Viewer Styles */
+
+.supernote-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  color: var(--text-muted);
+  font-size: 1.2em;
+}
+
+.supernote-error {
+  padding: 20px;
+  color: var(--text-error);
+  background-color: var(--background-modifier-error);
+  border-radius: 4px;
+  margin: 10px;
+}
+
+.supernote-header {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 20px;
+}
+
+.supernote-title {
+  margin: 0 0 5px 0;
+  font-size: 1.5em;
+}
+
+.supernote-info {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.supernote-pages {
+  padding: 0 20px 20px 20px;
+}
+
+.supernote-page {
+  margin-bottom: 20px;
+}
+
+.supernote-page-header {
+  font-weight: bold;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  font-size: 0.9em;
+}
+
+.supernote-page-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.supernote-page-divider {
+  border: none;
+  border-top: 1px solid var(--background-modifier-border);
+  margin: 30px 0;
+}
+
+.supernote-page-error {
+  padding: 20px;
+  color: var(--text-muted);
+  background-color: var(--background-secondary);
+  border-radius: 4px;
+  text-align: center;
+}
+
+/* Dark mode inversion support */
+.theme-dark .supernote-page-image {
+  filter: invert(1) hue-rotate(180deg);
+}

@@ -1,0 +1,9 @@
+{
+  "id": "supernote-viewer",
+  "name": "Supernote Viewer",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "Simple viewer for Supernote .note files",
+  "author": "Kashif",
+  "isDesktopOnly": false
+}

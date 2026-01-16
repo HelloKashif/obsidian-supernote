@@ -1,5 +1,5 @@
 {
-  "name": "obsidian-supernote",
+  "name": "supernote",
   "version": "1.0.0",
   "description": "Supernote plugin for Obsidian - view and manage .note files",
   "main": "main.js",

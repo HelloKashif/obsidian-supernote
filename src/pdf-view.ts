@@ -331,6 +331,8 @@ export class AnnotatedPdfView extends FileView {
           img.onload = () => {
             const octx = overlayCanvas.getContext('2d');
             if (octx) {
+              // Disable image smoothing for crisp scaling (reduces moiré)
+              octx.imageSmoothingEnabled = false;
               console.log(`[pdf-view] Drawing annotation for page ${pageNum}, size: ${viewport.width}x${viewport.height}`);
               octx.drawImage(img, 0, 0, viewport.width, viewport.height);
             }

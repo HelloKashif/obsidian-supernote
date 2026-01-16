@@ -324,7 +324,13 @@ var SupernoteView = class extends import_obsidian.FileView {
     // View settings
     this.viewMode = "single";
     this.fitMode = "width";
+    this.zoomLevel = 100;
+    this.currentPage = 1;
+    this.totalPages = 0;
     this.pagesContainer = null;
+    this.pageElements = [];
+    // Toolbar elements
+    this.pageDisplay = null;
     this.viewContent = this.containerEl.children[1];
   }
   getViewType() {
@@ -345,9 +351,12 @@ var SupernoteView = class extends import_obsidian.FileView {
       const buffer = await this.app.vault.readBinary(file);
       const data = new Uint8Array(buffer);
       const note = parseSupernoteFile(data);
+      this.totalPages = note.pages.length;
+      this.currentPage = 1;
       loadingEl.remove();
-      this.renderToolbar(note);
+      this.renderToolbar();
       await this.renderPages(note);
+      this.setupScrollObserver();
     } catch (error) {
       loadingEl.remove();
       this.viewContent.createEl("div", {
@@ -362,70 +371,180 @@ var SupernoteView = class extends import_obsidian.FileView {
     this.renderedImages = [];
     this.currentFile = null;
     this.pagesContainer = null;
+    this.pageElements = [];
+    this.pageDisplay = null;
+    this.zoomLevel = 100;
+    this.currentPage = 1;
   }
-  renderToolbar(note) {
-    const controls = this.viewContent.createEl("div", { cls: "supernote-floating-controls" });
-    const viewModeBtn = controls.createEl("button", {
-      cls: "supernote-icon-btn",
-      attr: { "aria-label": "Toggle single/two-page view", "title": "Toggle view mode" }
+  renderToolbar() {
+    const toolbar = this.viewContent.createEl("div", { cls: "supernote-toolbar" });
+    const navSection = toolbar.createEl("div", { cls: "supernote-toolbar-section" });
+    const prevBtn = navSection.createEl("button", {
+      cls: "supernote-toolbar-btn clickable-icon",
+      attr: { "aria-label": "Previous page" }
     });
-    this.updateViewModeButton(viewModeBtn);
-    viewModeBtn.addEventListener("click", () => {
-      this.viewMode = this.viewMode === "single" ? "two-page" : "single";
-      this.updateViewModeButton(viewModeBtn);
-      this.applyViewSettings();
+    prevBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+    prevBtn.addEventListener("click", () => this.goToPrevPage());
+    const nextBtn = navSection.createEl("button", {
+      cls: "supernote-toolbar-btn clickable-icon",
+      attr: { "aria-label": "Next page" }
     });
-    const fitModeBtn = controls.createEl("button", {
-      cls: "supernote-icon-btn",
-      attr: { "aria-label": "Toggle fit width/height", "title": "Toggle fit mode" }
+    nextBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+    nextBtn.addEventListener("click", () => this.goToNextPage());
+    this.pageDisplay = navSection.createEl("span", {
+      cls: "supernote-page-display",
+      text: `${this.currentPage} of ${this.totalPages}`
     });
-    this.updateFitModeButton(fitModeBtn);
-    fitModeBtn.addEventListener("click", () => {
-      this.fitMode = this.fitMode === "width" ? "height" : "width";
-      this.updateFitModeButton(fitModeBtn);
-      this.applyViewSettings();
+    const zoomSection = toolbar.createEl("div", { cls: "supernote-toolbar-section" });
+    const zoomOutBtn = zoomSection.createEl("button", {
+      cls: "supernote-toolbar-btn clickable-icon",
+      attr: { "aria-label": "Zoom out" }
     });
+    zoomOutBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>';
+    zoomOutBtn.addEventListener("click", () => this.zoomOut());
+    const zoomInBtn = zoomSection.createEl("button", {
+      cls: "supernote-toolbar-btn clickable-icon",
+      attr: { "aria-label": "Zoom in" }
+    });
+    zoomInBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>';
+    zoomInBtn.addEventListener("click", () => this.zoomIn());
+    const optionsSection = toolbar.createEl("div", { cls: "supernote-toolbar-section" });
+    const optionsBtn = optionsSection.createEl("button", {
+      cls: "supernote-toolbar-btn clickable-icon",
+      attr: { "aria-label": "View options" }
+    });
+    optionsBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+    optionsBtn.addEventListener("click", (e) => this.showOptionsMenu(e));
   }
-  updateViewModeButton(btn) {
-    if (this.viewMode === "single") {
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>';
-      btn.removeClass("active");
-      btn.setAttribute("title", "Single page view");
-    } else {
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="8" height="18" rx="1"/><rect x="14" y="3" width="8" height="18" rx="1"/></svg>';
-      btn.addClass("active");
-      btn.setAttribute("title", "Two-page view");
+  showOptionsMenu(e) {
+    const menu = new import_obsidian.Menu();
+    menu.addItem((item) => {
+      item.setTitle("Fit width");
+      item.setChecked(this.fitMode === "width");
+      item.onClick(() => {
+        this.fitMode = "width";
+        this.applyViewSettings();
+      });
+    });
+    menu.addItem((item) => {
+      item.setTitle("Fit height");
+      item.setChecked(this.fitMode === "height");
+      item.onClick(() => {
+        this.fitMode = "height";
+        this.applyViewSettings();
+      });
+    });
+    menu.addSeparator();
+    menu.addItem((item) => {
+      item.setTitle("Single page");
+      item.setChecked(this.viewMode === "single");
+      item.onClick(() => {
+        this.viewMode = "single";
+        this.applyViewSettings();
+      });
+    });
+    menu.addItem((item) => {
+      item.setTitle("Two-page (odd)");
+      item.setChecked(this.viewMode === "two-page-odd");
+      item.onClick(() => {
+        this.viewMode = "two-page-odd";
+        this.applyViewSettings();
+      });
+    });
+    menu.addItem((item) => {
+      item.setTitle("Two-page (even)");
+      item.setChecked(this.viewMode === "two-page-even");
+      item.onClick(() => {
+        this.viewMode = "two-page-even";
+        this.applyViewSettings();
+      });
+    });
+    menu.showAtMouseEvent(e);
+  }
+  goToPrevPage() {
+    if (this.currentPage > 1) {
+      this.currentPage--;
+      this.scrollToPage(this.currentPage);
+      this.updatePageDisplay();
     }
   }
-  updateFitModeButton(btn) {
-    if (this.fitMode === "width") {
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12H3M21 12l-4-4M21 12l-4 4M3 12l4-4M3 12l4 4"/></svg>';
-      btn.removeClass("active");
-      btn.setAttribute("title", "Fit to width");
-    } else {
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M12 3l-4 4M12 3l4 4M12 21l-4-4M12 21l4-4"/></svg>';
-      btn.addClass("active");
-      btn.setAttribute("title", "Fit to height");
+  goToNextPage() {
+    if (this.currentPage < this.totalPages) {
+      this.currentPage++;
+      this.scrollToPage(this.currentPage);
+      this.updatePageDisplay();
+    }
+  }
+  scrollToPage(pageNum) {
+    const pageEl = this.pageElements[pageNum - 1];
+    if (pageEl) {
+      pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+  updatePageDisplay() {
+    if (this.pageDisplay) {
+      this.pageDisplay.setText(`${this.currentPage} of ${this.totalPages}`);
+    }
+  }
+  zoomIn() {
+    if (this.zoomLevel < 200) {
+      this.zoomLevel += 25;
+      this.applyZoom();
+    }
+  }
+  zoomOut() {
+    if (this.zoomLevel > 50) {
+      this.zoomLevel -= 25;
+      this.applyZoom();
+    }
+  }
+  applyZoom() {
+    if (this.pagesContainer) {
+      this.pagesContainer.style.setProperty("--zoom-level", `${this.zoomLevel}%`);
     }
   }
   applyViewSettings() {
     if (!this.pagesContainer)
       return;
-    this.pagesContainer.removeClass("view-single", "view-two-page");
-    this.pagesContainer.addClass(`view-${this.viewMode === "single" ? "single" : "two-page"}`);
+    this.pagesContainer.removeClass("view-single", "view-two-page-odd", "view-two-page-even");
+    this.pagesContainer.addClass(`view-${this.viewMode}`);
     this.pagesContainer.removeClass("fit-width", "fit-height");
     this.pagesContainer.addClass(`fit-${this.fitMode}`);
   }
+  setupScrollObserver() {
+    if (!this.pagesContainer)
+      return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+            const pageIndex = this.pageElements.indexOf(entry.target);
+            if (pageIndex !== -1) {
+              this.currentPage = pageIndex + 1;
+              this.updatePageDisplay();
+            }
+          }
+        }
+      },
+      {
+        root: this.viewContent,
+        threshold: 0.5
+      }
+    );
+    this.pageElements.forEach((el) => observer.observe(el));
+  }
   async renderPages(note) {
     this.pagesContainer = this.viewContent.createEl("div", {
-      cls: `supernote-pages view-${this.viewMode === "single" ? "single" : "two-page"} fit-${this.fitMode}`
+      cls: `supernote-pages view-${this.viewMode} fit-${this.fitMode}`
     });
+    this.pagesContainer.style.setProperty("--zoom-level", `${this.zoomLevel}%`);
     for (let i = 0; i < note.pages.length; i++) {
       if (this.currentFile !== this.file) {
         return;
       }
       const pageContainer = this.pagesContainer.createEl("div", { cls: "supernote-page" });
-      const pageNumber = pageContainer.createEl("div", {
+      this.pageElements.push(pageContainer);
+      pageContainer.createEl("div", {
         cls: "supernote-page-number",
         text: `${i + 1}`
       });

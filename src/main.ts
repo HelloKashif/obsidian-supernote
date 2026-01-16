@@ -1,10 +1,10 @@
-import { Plugin, TFile, WorkspaceLeaf, FileView } from 'obsidian';
+import { Plugin, TFile, WorkspaceLeaf, FileView, Menu } from 'obsidian';
 import { parseSupernoteFile, SupernoteFile } from './parser';
 import { renderPage, imageDataToDataUrl } from './renderer';
 
 const VIEW_TYPE_SUPERNOTE = 'supernote-viewer';
 
-type ViewMode = 'single' | 'two-page';
+type ViewMode = 'single' | 'two-page-odd' | 'two-page-even';
 type FitMode = 'width' | 'height';
 
 class SupernoteView extends FileView {
@@ -15,7 +15,14 @@ class SupernoteView extends FileView {
   // View settings
   private viewMode: ViewMode = 'single';
   private fitMode: FitMode = 'width';
+  private zoomLevel: number = 100;
+  private currentPage: number = 1;
+  private totalPages: number = 0;
   private pagesContainer: HTMLElement | null = null;
+  private pageElements: HTMLElement[] = [];
+
+  // Toolbar elements
+  private pageDisplay: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -31,32 +38,33 @@ class SupernoteView extends FileView {
   }
 
   async onLoadFile(file: TFile): Promise<void> {
-    // Clear everything first to prevent ghosting
     this.clearView();
     this.currentFile = file;
 
-    // Show loading state
     const loadingEl = this.viewContent.createEl('div', {
       cls: 'supernote-loading',
       text: 'Loading...',
     });
 
     try {
-      // Read file as binary
       const buffer = await this.app.vault.readBinary(file);
       const data = new Uint8Array(buffer);
-
-      // Parse the file
       const note = parseSupernoteFile(data);
 
-      // Remove loading state
+      this.totalPages = note.pages.length;
+      this.currentPage = 1;
+
       loadingEl.remove();
 
-      // Render toolbar
-      this.renderToolbar(note);
+      // Render toolbar in the native style
+      this.renderToolbar();
 
       // Render pages
       await this.renderPages(note);
+
+      // Setup scroll observer for page tracking
+      this.setupScrollObserver();
+
     } catch (error) {
       loadingEl.remove();
       this.viewContent.createEl('div', {
@@ -72,60 +80,171 @@ class SupernoteView extends FileView {
     this.renderedImages = [];
     this.currentFile = null;
     this.pagesContainer = null;
+    this.pageElements = [];
+    this.pageDisplay = null;
+    this.zoomLevel = 100;
+    this.currentPage = 1;
   }
 
-  private renderToolbar(note: SupernoteFile): void {
-    // Floating buttons container in top right
-    const controls = this.viewContent.createEl('div', { cls: 'supernote-floating-controls' });
+  private renderToolbar(): void {
+    const toolbar = this.viewContent.createEl('div', { cls: 'supernote-toolbar' });
 
-    // View mode toggle (single / two-page)
-    const viewModeBtn = controls.createEl('button', {
-      cls: 'supernote-icon-btn',
-      attr: { 'aria-label': 'Toggle single/two-page view', 'title': 'Toggle view mode' },
+    // Left section: Page navigation
+    const navSection = toolbar.createEl('div', { cls: 'supernote-toolbar-section' });
+
+    // Previous page button
+    const prevBtn = navSection.createEl('button', {
+      cls: 'supernote-toolbar-btn clickable-icon',
+      attr: { 'aria-label': 'Previous page' },
     });
-    this.updateViewModeButton(viewModeBtn);
-    viewModeBtn.addEventListener('click', () => {
-      this.viewMode = this.viewMode === 'single' ? 'two-page' : 'single';
-      this.updateViewModeButton(viewModeBtn);
-      this.applyViewSettings();
+    prevBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+    prevBtn.addEventListener('click', () => this.goToPrevPage());
+
+    // Next page button
+    const nextBtn = navSection.createEl('button', {
+      cls: 'supernote-toolbar-btn clickable-icon',
+      attr: { 'aria-label': 'Next page' },
+    });
+    nextBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+    nextBtn.addEventListener('click', () => this.goToNextPage());
+
+    // Page display
+    this.pageDisplay = navSection.createEl('span', {
+      cls: 'supernote-page-display',
+      text: `${this.currentPage} of ${this.totalPages}`,
     });
 
-    // Fit mode toggle (width / height)
-    const fitModeBtn = controls.createEl('button', {
-      cls: 'supernote-icon-btn',
-      attr: { 'aria-label': 'Toggle fit width/height', 'title': 'Toggle fit mode' },
+    // Middle section: Zoom controls
+    const zoomSection = toolbar.createEl('div', { cls: 'supernote-toolbar-section' });
+
+    // Zoom out button
+    const zoomOutBtn = zoomSection.createEl('button', {
+      cls: 'supernote-toolbar-btn clickable-icon',
+      attr: { 'aria-label': 'Zoom out' },
     });
-    this.updateFitModeButton(fitModeBtn);
-    fitModeBtn.addEventListener('click', () => {
-      this.fitMode = this.fitMode === 'width' ? 'height' : 'width';
-      this.updateFitModeButton(fitModeBtn);
-      this.applyViewSettings();
+    zoomOutBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>';
+    zoomOutBtn.addEventListener('click', () => this.zoomOut());
+
+    // Zoom in button
+    const zoomInBtn = zoomSection.createEl('button', {
+      cls: 'supernote-toolbar-btn clickable-icon',
+      attr: { 'aria-label': 'Zoom in' },
     });
+    zoomInBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>';
+    zoomInBtn.addEventListener('click', () => this.zoomIn());
+
+    // Right section: View options dropdown
+    const optionsSection = toolbar.createEl('div', { cls: 'supernote-toolbar-section' });
+
+    const optionsBtn = optionsSection.createEl('button', {
+      cls: 'supernote-toolbar-btn clickable-icon',
+      attr: { 'aria-label': 'View options' },
+    });
+    optionsBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+    optionsBtn.addEventListener('click', (e) => this.showOptionsMenu(e));
   }
 
-  private updateViewModeButton(btn: HTMLElement): void {
-    // Use simple icons: ▢ for single, ▢▢ for two-page
-    if (this.viewMode === 'single') {
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>';
-      btn.removeClass('active');
-      btn.setAttribute('title', 'Single page view');
-    } else {
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="8" height="18" rx="1"/><rect x="14" y="3" width="8" height="18" rx="1"/></svg>';
-      btn.addClass('active');
-      btn.setAttribute('title', 'Two-page view');
+  private showOptionsMenu(e: MouseEvent): void {
+    const menu = new Menu();
+
+    // Fit options
+    menu.addItem((item) => {
+      item.setTitle('Fit width');
+      item.setChecked(this.fitMode === 'width');
+      item.onClick(() => {
+        this.fitMode = 'width';
+        this.applyViewSettings();
+      });
+    });
+
+    menu.addItem((item) => {
+      item.setTitle('Fit height');
+      item.setChecked(this.fitMode === 'height');
+      item.onClick(() => {
+        this.fitMode = 'height';
+        this.applyViewSettings();
+      });
+    });
+
+    menu.addSeparator();
+
+    // View mode options
+    menu.addItem((item) => {
+      item.setTitle('Single page');
+      item.setChecked(this.viewMode === 'single');
+      item.onClick(() => {
+        this.viewMode = 'single';
+        this.applyViewSettings();
+      });
+    });
+
+    menu.addItem((item) => {
+      item.setTitle('Two-page (odd)');
+      item.setChecked(this.viewMode === 'two-page-odd');
+      item.onClick(() => {
+        this.viewMode = 'two-page-odd';
+        this.applyViewSettings();
+      });
+    });
+
+    menu.addItem((item) => {
+      item.setTitle('Two-page (even)');
+      item.setChecked(this.viewMode === 'two-page-even');
+      item.onClick(() => {
+        this.viewMode = 'two-page-even';
+        this.applyViewSettings();
+      });
+    });
+
+    menu.showAtMouseEvent(e);
+  }
+
+  private goToPrevPage(): void {
+    if (this.currentPage > 1) {
+      this.currentPage--;
+      this.scrollToPage(this.currentPage);
+      this.updatePageDisplay();
     }
   }
 
-  private updateFitModeButton(btn: HTMLElement): void {
-    // Use arrows: ↔ for width, ↕ for height
-    if (this.fitMode === 'width') {
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12H3M21 12l-4-4M21 12l-4 4M3 12l4-4M3 12l4 4"/></svg>';
-      btn.removeClass('active');
-      btn.setAttribute('title', 'Fit to width');
-    } else {
-      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M12 3l-4 4M12 3l4 4M12 21l-4-4M12 21l4-4"/></svg>';
-      btn.addClass('active');
-      btn.setAttribute('title', 'Fit to height');
+  private goToNextPage(): void {
+    if (this.currentPage < this.totalPages) {
+      this.currentPage++;
+      this.scrollToPage(this.currentPage);
+      this.updatePageDisplay();
+    }
+  }
+
+  private scrollToPage(pageNum: number): void {
+    const pageEl = this.pageElements[pageNum - 1];
+    if (pageEl) {
+      pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  private updatePageDisplay(): void {
+    if (this.pageDisplay) {
+      this.pageDisplay.setText(`${this.currentPage} of ${this.totalPages}`);
+    }
+  }
+
+  private zoomIn(): void {
+    if (this.zoomLevel < 200) {
+      this.zoomLevel += 25;
+      this.applyZoom();
+    }
+  }
+
+  private zoomOut(): void {
+    if (this.zoomLevel > 50) {
+      this.zoomLevel -= 25;
+      this.applyZoom();
+    }
+  }
+
+  private applyZoom(): void {
+    if (this.pagesContainer) {
+      this.pagesContainer.style.setProperty('--zoom-level', `${this.zoomLevel}%`);
     }
   }
 
@@ -133,34 +252,58 @@ class SupernoteView extends FileView {
     if (!this.pagesContainer) return;
 
     // Update view mode class
-    this.pagesContainer.removeClass('view-single', 'view-two-page');
-    this.pagesContainer.addClass(`view-${this.viewMode === 'single' ? 'single' : 'two-page'}`);
+    this.pagesContainer.removeClass('view-single', 'view-two-page-odd', 'view-two-page-even');
+    this.pagesContainer.addClass(`view-${this.viewMode}`);
 
     // Update fit mode class
     this.pagesContainer.removeClass('fit-width', 'fit-height');
     this.pagesContainer.addClass(`fit-${this.fitMode}`);
   }
 
+  private setupScrollObserver(): void {
+    if (!this.pagesContainer) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+            const pageIndex = this.pageElements.indexOf(entry.target as HTMLElement);
+            if (pageIndex !== -1) {
+              this.currentPage = pageIndex + 1;
+              this.updatePageDisplay();
+            }
+          }
+        }
+      },
+      {
+        root: this.viewContent,
+        threshold: 0.5,
+      }
+    );
+
+    this.pageElements.forEach((el) => observer.observe(el));
+  }
+
   private async renderPages(note: SupernoteFile): Promise<void> {
     this.pagesContainer = this.viewContent.createEl('div', {
-      cls: `supernote-pages view-${this.viewMode === 'single' ? 'single' : 'two-page'} fit-${this.fitMode}`
+      cls: `supernote-pages view-${this.viewMode} fit-${this.fitMode}`
     });
+    this.pagesContainer.style.setProperty('--zoom-level', `${this.zoomLevel}%`);
 
     for (let i = 0; i < note.pages.length; i++) {
-      // Check if we're still viewing the same file
       if (this.currentFile !== this.file) {
-        return; // File changed, stop rendering
+        return;
       }
 
       const pageContainer = this.pagesContainer.createEl('div', { cls: 'supernote-page' });
+      this.pageElements.push(pageContainer);
 
-      // Page number overlay
-      const pageNumber = pageContainer.createEl('div', {
+      // Page number badge
+      pageContainer.createEl('div', {
         cls: 'supernote-page-number',
         text: `${i + 1}`,
       });
 
-      // Render page image
       try {
         const imageData = renderPage(note, i);
         if (imageData) {
@@ -181,7 +324,6 @@ class SupernoteView extends FileView {
         console.error(`Error rendering page ${i + 1}:`, error);
       }
 
-      // Yield to allow UI updates between pages
       await new Promise(resolve => setTimeout(resolve, 0));
     }
   }
@@ -197,12 +339,8 @@ class SupernoteView extends FileView {
 
 export default class SupernoteViewerPlugin extends Plugin {
   async onload(): Promise<void> {
-    // Register the custom view
     this.registerView(VIEW_TYPE_SUPERNOTE, (leaf) => new SupernoteView(leaf));
-
-    // Register .note file extension
     this.registerExtensions(['note'], VIEW_TYPE_SUPERNOTE);
-
     console.log('Supernote Viewer plugin loaded');
   }
 

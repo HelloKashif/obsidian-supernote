@@ -318,20 +318,27 @@ export class AnnotatedPdfView extends FileView {
           overlayContainer.style.height = `${viewport.height}px`;
 
           // Use canvas instead of img to avoid scaling artifacts
-          const overlayCanvas = overlayContainer.createEl('canvas', {
-            cls: 'annotation-overlay',
-          });
+          const overlayCanvas = document.createElement('canvas');
+          overlayCanvas.className = 'annotation-overlay';
           overlayCanvas.width = viewport.width;
           overlayCanvas.height = viewport.height;
           overlayCanvas.style.display = this.showAnnotations ? 'block' : 'none';
+          overlayContainer.appendChild(overlayCanvas);
 
           // Load the cached image and draw it scaled to viewport
           const img = new Image();
+          const cachedSrc = this.annotationCache[pageNum];
           img.onload = () => {
-            const octx = overlayCanvas.getContext('2d')!;
-            octx.drawImage(img, 0, 0, viewport.width, viewport.height);
+            const octx = overlayCanvas.getContext('2d');
+            if (octx) {
+              console.log(`[pdf-view] Drawing annotation for page ${pageNum}, size: ${viewport.width}x${viewport.height}`);
+              octx.drawImage(img, 0, 0, viewport.width, viewport.height);
+            }
           };
-          img.src = this.annotationCache[pageNum];
+          img.onerror = (e) => {
+            console.error(`[pdf-view] Failed to load annotation image for page ${pageNum}`, e);
+          };
+          img.src = cachedSrc;
         }
 
         // Page number indicator

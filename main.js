@@ -32141,18 +32141,25 @@ var AnnotatedPdfView = class extends import_obsidian.FileView {
           const overlayContainer = pageContainer.createEl("div", { cls: "annotation-overlay-container" });
           overlayContainer.style.width = `${viewport.width}px`;
           overlayContainer.style.height = `${viewport.height}px`;
-          const overlayCanvas = overlayContainer.createEl("canvas", {
-            cls: "annotation-overlay"
-          });
+          const overlayCanvas = document.createElement("canvas");
+          overlayCanvas.className = "annotation-overlay";
           overlayCanvas.width = viewport.width;
           overlayCanvas.height = viewport.height;
           overlayCanvas.style.display = this.showAnnotations ? "block" : "none";
+          overlayContainer.appendChild(overlayCanvas);
           const img = new Image();
+          const cachedSrc = this.annotationCache[pageNum];
           img.onload = () => {
             const octx = overlayCanvas.getContext("2d");
-            octx.drawImage(img, 0, 0, viewport.width, viewport.height);
+            if (octx) {
+              console.log(`[pdf-view] Drawing annotation for page ${pageNum}, size: ${viewport.width}x${viewport.height}`);
+              octx.drawImage(img, 0, 0, viewport.width, viewport.height);
+            }
           };
-          img.src = this.annotationCache[pageNum];
+          img.onerror = (e) => {
+            console.error(`[pdf-view] Failed to load annotation image for page ${pageNum}`, e);
+          };
+          img.src = cachedSrc;
         }
         pageContainer.createEl("div", {
           cls: "pdf-page-number",

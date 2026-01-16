@@ -31810,6 +31810,17 @@ function decodeRle(data, width, height) {
     pixels[i + 2] = 0;
     pixels[i + 3] = 0;
   }
+  const drawPixels = (colorCode, count) => {
+    const color = ANNOTATION_COLORS[colorCode] || [255, 0, 255, 255];
+    for (let i = 0; i < count && pixelIndex < totalPixels; i++) {
+      const idx = pixelIndex * 4;
+      pixels[idx] = color[0];
+      pixels[idx + 1] = color[1];
+      pixels[idx + 2] = color[2];
+      pixels[idx + 3] = color[3];
+      pixelIndex++;
+    }
+  };
   let heldLength = 0;
   let heldColor = 0;
   let hasHeld = false;
@@ -31821,25 +31832,46 @@ function decodeRle(data, width, height) {
     let length;
     if (lengthByte === SPECIAL_LENGTH_MARKER2) {
       length = SPECIAL_LENGTH2;
+      if (hasHeld && heldColor !== colorCode) {
+        drawPixels(heldColor, heldLength + 1);
+        hasHeld = false;
+      }
+      if (hasHeld && heldColor === colorCode) {
+        length = 1 + length + (heldLength + 1 << 7);
+        hasHeld = false;
+      }
+      drawPixels(colorCode, length);
     } else if ((lengthByte & HIGH_BIT_FLAG) !== 0) {
+      if (hasHeld && heldColor !== colorCode) {
+        drawPixels(heldColor, heldLength + 1);
+      }
       heldLength = lengthByte & 127;
       heldColor = colorCode;
       hasHeld = true;
-      continue;
     } else {
       length = lengthByte + 1;
+      if (hasHeld && heldColor !== colorCode) {
+        drawPixels(heldColor, heldLength + 1);
+        hasHeld = false;
+      }
+      if (hasHeld && colorCode === heldColor) {
+        length = 1 + length + (heldLength + 1 << 7);
+        hasHeld = false;
+      }
+      drawPixels(colorCode, length);
     }
-    if (hasHeld && colorCode === heldColor) {
-      length = 1 + length + (heldLength + 1 << 7);
-      hasHeld = false;
-    }
-    const color = ANNOTATION_COLORS[colorCode] || [255, 0, 255, 255];
-    for (let i = 0; i < length && pixelIndex < totalPixels; i++) {
+  }
+  if (hasHeld) {
+    drawPixels(heldColor, heldLength + 1);
+  }
+  if (pixelIndex < totalPixels) {
+    const bgColor = ANNOTATION_COLORS[COLORCODE_BACKGROUND];
+    while (pixelIndex < totalPixels) {
       const idx = pixelIndex * 4;
-      pixels[idx] = color[0];
-      pixels[idx + 1] = color[1];
-      pixels[idx + 2] = color[2];
-      pixels[idx + 3] = color[3];
+      pixels[idx] = bgColor[0];
+      pixels[idx + 1] = bgColor[1];
+      pixels[idx + 2] = bgColor[2];
+      pixels[idx + 3] = bgColor[3];
       pixelIndex++;
     }
   }

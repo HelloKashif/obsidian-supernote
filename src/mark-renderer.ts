@@ -53,6 +53,18 @@ function decodeRle(data: Uint8Array, width: number, height: number): ImageData {
     pixels[i + 3] = 0;
   }
 
+  const drawPixels = (colorCode: number, count: number) => {
+    const color = ANNOTATION_COLORS[colorCode] || [255, 0, 255, 255];
+    for (let i = 0; i < count && pixelIndex < totalPixels; i++) {
+      const idx = pixelIndex * 4;
+      pixels[idx] = color[0];
+      pixels[idx + 1] = color[1];
+      pixels[idx + 2] = color[2];
+      pixels[idx + 3] = color[3];
+      pixelIndex++;
+    }
+  };
+
   let heldLength = 0;
   let heldColor = 0;
   let hasHeld = false;
@@ -67,32 +79,64 @@ function decodeRle(data: Uint8Array, width: number, height: number): ImageData {
     if (lengthByte === SPECIAL_LENGTH_MARKER) {
       // Special marker: use large length
       length = SPECIAL_LENGTH;
+
+      // If we had a held state with different color, flush it first
+      if (hasHeld && heldColor !== colorCode) {
+        drawPixels(heldColor, (heldLength + 1));
+        hasHeld = false;
+      }
+
+      if (hasHeld && heldColor === colorCode) {
+        length = 1 + length + ((heldLength + 1) << 7);
+        hasHeld = false;
+      }
+
+      drawPixels(colorCode, length);
     } else if ((lengthByte & HIGH_BIT_FLAG) !== 0) {
-      // High bit set: combine with next same-color run
-      // Hold this and combine with next
+      // High bit set: this run continues in next pair
+      // If we already have a held state with different color, flush it
+      if (hasHeld && heldColor !== colorCode) {
+        drawPixels(heldColor, (heldLength + 1));
+      }
+
       heldLength = lengthByte & 0x7f;
       heldColor = colorCode;
       hasHeld = true;
-      continue;
+      // Don't draw yet - wait for continuation
     } else {
       // Normal length: value + 1
       length = lengthByte + 1;
+
+      // If we had a held state with different color, flush it first
+      if (hasHeld && heldColor !== colorCode) {
+        drawPixels(heldColor, (heldLength + 1));
+        hasHeld = false;
+      }
+
+      // Check if we have a held length to combine (same color)
+      if (hasHeld && colorCode === heldColor) {
+        length = 1 + length + ((heldLength + 1) << 7);
+        hasHeld = false;
+      }
+
+      drawPixels(colorCode, length);
     }
+  }
 
-    // Check if we have a held length to combine
-    if (hasHeld && colorCode === heldColor) {
-      length = 1 + length + ((heldLength + 1) << 7);
-      hasHeld = false;
-    }
+  // Flush any remaining held state
+  if (hasHeld) {
+    drawPixels(heldColor, (heldLength + 1));
+  }
 
-    const color = ANNOTATION_COLORS[colorCode] || [255, 0, 255, 255]; // Magenta for unknown
-
-    for (let i = 0; i < length && pixelIndex < totalPixels; i++) {
+  // If we haven't filled all pixels, fill rest with background
+  if (pixelIndex < totalPixels) {
+    const bgColor = ANNOTATION_COLORS[COLORCODE_BACKGROUND];
+    while (pixelIndex < totalPixels) {
       const idx = pixelIndex * 4;
-      pixels[idx] = color[0];
-      pixels[idx + 1] = color[1];
-      pixels[idx + 2] = color[2];
-      pixels[idx + 3] = color[3];
+      pixels[idx] = bgColor[0];
+      pixels[idx + 1] = bgColor[1];
+      pixels[idx + 2] = bgColor[2];
+      pixels[idx + 3] = bgColor[3];
       pixelIndex++;
     }
   }

@@ -1,4 +1,14 @@
-/* Supernote Viewer Styles - Native PDF-like UI */
+/* Supernote Viewer Styles - Native PDF-like UI with Thumbnails */
+
+/* Root view container - must fill entire space */
+.view-content:has(.supernote-toolbar) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding: 0 !important;
+  margin: 0 !important;
+}
 
 /* Loading and error states */
 .supernote-loading {
@@ -27,9 +37,7 @@
   padding: 4px 8px;
   background-color: var(--background-primary);
   border-bottom: 1px solid var(--background-modifier-border);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  flex-shrink: 0;
 }
 
 .supernote-toolbar-section {
@@ -38,7 +46,6 @@
   gap: 2px;
 }
 
-/* Native-style toolbar buttons */
 .supernote-toolbar-btn {
   background: transparent;
   border: none;
@@ -60,12 +67,145 @@
   display: block;
 }
 
-/* Page display text */
 .supernote-page-display {
+  display: flex;
+  align-items: center;
   font-size: 0.85em;
   color: var(--text-muted);
   padding: 0 8px;
   white-space: nowrap;
+}
+
+.supernote-page-input {
+  width: 2.5em;
+  padding: 2px 4px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: inherit;
+  font-family: inherit;
+  text-align: center;
+}
+
+.supernote-page-input:hover {
+  border-color: var(--background-modifier-border);
+}
+
+.supernote-page-input:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.supernote-page-total {
+  color: var(--text-muted);
+}
+
+/* Main container - sidebar + content */
+.supernote-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: calc(100% - 32px);
+}
+
+/* Thumbnail sidebar */
+.supernote-sidebar {
+  width: 150px;
+  min-width: 100px;
+  max-width: 400px;
+  background-color: var(--background-secondary);
+  border-right: 1px solid var(--background-modifier-border);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.supernote-sidebar.hidden {
+  display: none;
+}
+
+/* Resize handle */
+.supernote-sidebar-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  cursor: ew-resize;
+  background: transparent;
+  z-index: 10;
+}
+
+.supernote-sidebar-resize:hover {
+  background-color: var(--interactive-accent);
+}
+
+body.supernote-resizing {
+  cursor: ew-resize !important;
+  user-select: none;
+}
+
+body.supernote-resizing * {
+  cursor: ew-resize !important;
+}
+
+/* Thumbnails list */
+.supernote-thumbnails {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.supernote-thumbnail-wrapper {
+  position: relative;
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.supernote-thumbnail-wrapper:hover {
+  border-color: var(--background-modifier-border-hover);
+}
+
+.supernote-thumbnail-wrapper.active {
+  border-color: var(--interactive-accent);
+}
+
+.supernote-thumbnail {
+  display: block;
+  width: 100%;
+  height: auto;
+  background-color: var(--background-primary);
+}
+
+.supernote-thumbnail-number {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.65em;
+  font-weight: 500;
+}
+
+/* Content area */
+.supernote-content {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Pages container */
@@ -76,7 +216,7 @@
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  overflow-y: auto;
+  flex: 1;
 }
 
 /* View modes */
@@ -85,23 +225,16 @@
   max-width: 100%;
 }
 
-.supernote-pages.view-two-page-odd,
-.supernote-pages.view-two-page-even {
+.supernote-pages.view-two-page {
   flex-direction: row;
   flex-wrap: wrap;
   justify-content: center;
   align-items: flex-start;
 }
 
-.supernote-pages.view-two-page-odd .supernote-page,
-.supernote-pages.view-two-page-even .supernote-page {
+.supernote-pages.view-two-page .supernote-page {
   flex: 0 0 calc(var(--zoom-level) / 2 - 8px);
   max-width: calc(50% - 8px);
-}
-
-/* Two-page odd: first page alone on right */
-.supernote-pages.view-two-page-odd .supernote-page:first-child {
-  margin-left: calc(var(--zoom-level) / 2);
 }
 
 /* Page container */
@@ -114,7 +247,6 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Page number badge */
 .supernote-page-number {
   position: absolute;
   bottom: 8px;
@@ -128,14 +260,13 @@
   z-index: 5;
 }
 
-/* Page image */
 .supernote-page-image {
   display: block;
   width: 100%;
   height: auto;
 }
 
-/* Fit to width mode (default) */
+/* Fit modes */
 .supernote-pages.fit-width .supernote-page {
   width: var(--zoom-level);
   max-width: 100%;
@@ -146,7 +277,6 @@
   height: auto;
 }
 
-/* Fit to height mode */
 .supernote-pages.fit-height .supernote-page {
   width: auto;
   max-height: calc(100vh - 100px);
@@ -160,15 +290,9 @@
   object-fit: contain;
 }
 
-/* Two-page + fit-height combo */
-.supernote-pages.view-two-page-odd.fit-height .supernote-page,
-.supernote-pages.view-two-page-even.fit-height .supernote-page {
+.supernote-pages.view-two-page.fit-height .supernote-page {
   flex: 0 0 auto;
   max-width: calc(50% - 8px);
-}
-
-.supernote-pages.view-two-page-odd.fit-height .supernote-page:first-child {
-  margin-left: 0;
 }
 
 /* Page error */
@@ -184,24 +308,24 @@
 }
 
 /* Dark mode inversion */
-.theme-dark .supernote-page-image {
+.theme-dark .supernote-page-image,
+.theme-dark .supernote-thumbnail {
   filter: invert(1) hue-rotate(180deg);
 }
 
-/* Responsive adjustments */
+/* Responsive */
 @media (max-width: 800px) {
-  .supernote-pages.view-two-page-odd .supernote-page,
-  .supernote-pages.view-two-page-even .supernote-page {
+  .supernote-pages.view-two-page .supernote-page {
     flex: 0 0 100%;
     max-width: 100%;
-  }
-
-  .supernote-pages.view-two-page-odd .supernote-page:first-child {
-    margin-left: 0;
   }
 
   .supernote-toolbar {
     gap: 8px;
     padding: 4px;
+  }
+
+  .supernote-sidebar {
+    width: 100px;
   }
 }

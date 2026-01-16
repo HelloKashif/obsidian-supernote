@@ -327,10 +327,15 @@ var SupernoteView = class extends import_obsidian.FileView {
     this.zoomLevel = 100;
     this.currentPage = 1;
     this.totalPages = 0;
+    this.showThumbnails = true;
+    // DOM elements
     this.pagesContainer = null;
     this.pageElements = [];
-    // Toolbar elements
     this.pageDisplay = null;
+    this.pageInput = null;
+    this.thumbnailContainer = null;
+    this.thumbnailElements = [];
+    this.mainContainer = null;
     this.viewContent = this.containerEl.children[1];
   }
   getViewType() {
@@ -355,8 +360,11 @@ var SupernoteView = class extends import_obsidian.FileView {
       this.currentPage = 1;
       loadingEl.remove();
       this.renderToolbar();
+      this.mainContainer = this.viewContent.createEl("div", { cls: "supernote-main" });
+      this.renderThumbnailSidebar(note);
       await this.renderPages(note);
       this.setupScrollObserver();
+      this.updateThumbnailHighlight();
     } catch (error) {
       loadingEl.remove();
       this.viewContent.createEl("div", {
@@ -373,11 +381,22 @@ var SupernoteView = class extends import_obsidian.FileView {
     this.pagesContainer = null;
     this.pageElements = [];
     this.pageDisplay = null;
+    this.pageInput = null;
+    this.thumbnailContainer = null;
+    this.thumbnailElements = [];
+    this.mainContainer = null;
     this.zoomLevel = 100;
     this.currentPage = 1;
   }
   renderToolbar() {
     const toolbar = this.viewContent.createEl("div", { cls: "supernote-toolbar" });
+    const leftSection = toolbar.createEl("div", { cls: "supernote-toolbar-section" });
+    const thumbnailBtn = leftSection.createEl("button", {
+      cls: "supernote-toolbar-btn clickable-icon",
+      attr: { "aria-label": "Toggle thumbnails" }
+    });
+    thumbnailBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>';
+    thumbnailBtn.addEventListener("click", () => this.toggleThumbnails());
     const navSection = toolbar.createEl("div", { cls: "supernote-toolbar-section" });
     const prevBtn = navSection.createEl("button", {
       cls: "supernote-toolbar-btn clickable-icon",
@@ -391,9 +410,30 @@ var SupernoteView = class extends import_obsidian.FileView {
     });
     nextBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
     nextBtn.addEventListener("click", () => this.goToNextPage());
-    this.pageDisplay = navSection.createEl("span", {
-      cls: "supernote-page-display",
-      text: `${this.currentPage} of ${this.totalPages}`
+    this.pageDisplay = navSection.createEl("div", { cls: "supernote-page-display" });
+    this.pageInput = this.pageDisplay.createEl("input", {
+      cls: "supernote-page-input",
+      attr: {
+        type: "text",
+        value: String(this.currentPage),
+        "aria-label": "Go to page"
+      }
+    });
+    this.pageInput.addEventListener("keydown", (e) => {
+      var _a;
+      if (e.key === "Enter") {
+        this.handlePageInput();
+        (_a = this.pageInput) == null ? void 0 : _a.blur();
+      }
+    });
+    this.pageInput.addEventListener("blur", () => this.handlePageInput());
+    this.pageInput.addEventListener("focus", () => {
+      var _a;
+      return (_a = this.pageInput) == null ? void 0 : _a.select();
+    });
+    this.pageDisplay.createEl("span", {
+      cls: "supernote-page-total",
+      text: ` of ${this.totalPages}`
     });
     const zoomSection = toolbar.createEl("div", { cls: "supernote-toolbar-section" });
     const zoomOutBtn = zoomSection.createEl("button", {
@@ -415,6 +455,81 @@ var SupernoteView = class extends import_obsidian.FileView {
     });
     optionsBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
     optionsBtn.addEventListener("click", (e) => this.showOptionsMenu(e));
+  }
+  renderThumbnailSidebar(note) {
+    if (!this.mainContainer)
+      return;
+    const sidebar = this.mainContainer.createEl("div", {
+      cls: `supernote-sidebar ${this.showThumbnails ? "" : "hidden"}`
+    });
+    const resizeHandle = sidebar.createEl("div", { cls: "supernote-sidebar-resize" });
+    this.setupResizeHandle(resizeHandle, sidebar);
+    this.thumbnailContainer = sidebar.createEl("div", { cls: "supernote-thumbnails" });
+  }
+  setupResizeHandle(handle, sidebar) {
+    let startX;
+    let startWidth;
+    const onMouseMove = (e) => {
+      const newWidth = startWidth + (e.clientX - startX);
+      if (newWidth >= 100 && newWidth <= 400) {
+        sidebar.style.width = `${newWidth}px`;
+      }
+    };
+    const onMouseUp = () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.body.removeClass("supernote-resizing");
+    };
+    handle.addEventListener("mousedown", (e) => {
+      startX = e.clientX;
+      startWidth = sidebar.offsetWidth;
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+      document.body.addClass("supernote-resizing");
+    });
+  }
+  toggleThumbnails() {
+    var _a;
+    this.showThumbnails = !this.showThumbnails;
+    const sidebar = (_a = this.mainContainer) == null ? void 0 : _a.querySelector(".supernote-sidebar");
+    if (sidebar) {
+      sidebar.toggleClass("hidden", !this.showThumbnails);
+    }
+  }
+  populateThumbnails() {
+    if (!this.thumbnailContainer)
+      return;
+    this.thumbnailElements = [];
+    this.renderedImages.forEach((dataUrl, index) => {
+      const thumbWrapper = this.thumbnailContainer.createEl("div", {
+        cls: "supernote-thumbnail-wrapper",
+        attr: { "data-page": String(index + 1) }
+      });
+      const thumb = thumbWrapper.createEl("img", {
+        cls: "supernote-thumbnail",
+        attr: { src: dataUrl, alt: `Page ${index + 1}` }
+      });
+      const pageNum = thumbWrapper.createEl("div", {
+        cls: "supernote-thumbnail-number",
+        text: String(index + 1)
+      });
+      thumbWrapper.addEventListener("click", () => {
+        this.currentPage = index + 1;
+        this.scrollToPage(this.currentPage);
+        this.updatePageDisplay();
+        this.updateThumbnailHighlight();
+      });
+      this.thumbnailElements.push(thumbWrapper);
+    });
+  }
+  updateThumbnailHighlight() {
+    this.thumbnailElements.forEach((el, index) => {
+      el.toggleClass("active", index === this.currentPage - 1);
+    });
+    const activeThumbnail = this.thumbnailElements[this.currentPage - 1];
+    if (activeThumbnail && this.thumbnailContainer) {
+      activeThumbnail.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
   }
   showOptionsMenu(e) {
     const menu = new import_obsidian.Menu();
@@ -444,18 +559,10 @@ var SupernoteView = class extends import_obsidian.FileView {
       });
     });
     menu.addItem((item) => {
-      item.setTitle("Two-page (odd)");
-      item.setChecked(this.viewMode === "two-page-odd");
+      item.setTitle("Two-page");
+      item.setChecked(this.viewMode === "two-page");
       item.onClick(() => {
-        this.viewMode = "two-page-odd";
-        this.applyViewSettings();
-      });
-    });
-    menu.addItem((item) => {
-      item.setTitle("Two-page (even)");
-      item.setChecked(this.viewMode === "two-page-even");
-      item.onClick(() => {
-        this.viewMode = "two-page-even";
+        this.viewMode = "two-page";
         this.applyViewSettings();
       });
     });
@@ -466,6 +573,7 @@ var SupernoteView = class extends import_obsidian.FileView {
       this.currentPage--;
       this.scrollToPage(this.currentPage);
       this.updatePageDisplay();
+      this.updateThumbnailHighlight();
     }
   }
   goToNextPage() {
@@ -473,6 +581,7 @@ var SupernoteView = class extends import_obsidian.FileView {
       this.currentPage++;
       this.scrollToPage(this.currentPage);
       this.updatePageDisplay();
+      this.updateThumbnailHighlight();
     }
   }
   scrollToPage(pageNum) {
@@ -482,8 +591,20 @@ var SupernoteView = class extends import_obsidian.FileView {
     }
   }
   updatePageDisplay() {
-    if (this.pageDisplay) {
-      this.pageDisplay.setText(`${this.currentPage} of ${this.totalPages}`);
+    if (this.pageInput) {
+      this.pageInput.value = String(this.currentPage);
+    }
+  }
+  handlePageInput() {
+    if (!this.pageInput)
+      return;
+    const value = parseInt(this.pageInput.value, 10);
+    if (!isNaN(value) && value >= 1 && value <= this.totalPages) {
+      this.currentPage = value;
+      this.scrollToPage(this.currentPage);
+      this.updateThumbnailHighlight();
+    } else {
+      this.pageInput.value = String(this.currentPage);
     }
   }
   zoomIn() {
@@ -506,7 +627,7 @@ var SupernoteView = class extends import_obsidian.FileView {
   applyViewSettings() {
     if (!this.pagesContainer)
       return;
-    this.pagesContainer.removeClass("view-single", "view-two-page-odd", "view-two-page-even");
+    this.pagesContainer.removeClass("view-single", "view-two-page");
     this.pagesContainer.addClass(`view-${this.viewMode}`);
     this.pagesContainer.removeClass("fit-width", "fit-height");
     this.pagesContainer.addClass(`fit-${this.fitMode}`);
@@ -522,19 +643,23 @@ var SupernoteView = class extends import_obsidian.FileView {
             if (pageIndex !== -1) {
               this.currentPage = pageIndex + 1;
               this.updatePageDisplay();
+              this.updateThumbnailHighlight();
             }
           }
         }
       },
       {
-        root: this.viewContent,
+        root: this.pagesContainer,
         threshold: 0.5
       }
     );
     this.pageElements.forEach((el) => observer.observe(el));
   }
   async renderPages(note) {
-    this.pagesContainer = this.viewContent.createEl("div", {
+    if (!this.mainContainer)
+      return;
+    const contentArea = this.mainContainer.createEl("div", { cls: "supernote-content" });
+    this.pagesContainer = contentArea.createEl("div", {
       cls: `supernote-pages view-${this.viewMode} fit-${this.fitMode}`
     });
     this.pagesContainer.style.setProperty("--zoom-level", `${this.zoomLevel}%`);
@@ -568,6 +693,7 @@ var SupernoteView = class extends import_obsidian.FileView {
       }
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
+    this.populateThumbnails();
   }
   async onUnloadFile(file) {
     this.clearView();

@@ -28566,20 +28566,35 @@ var SupernoteViewerPlugin = class extends import_obsidian2.Plugin {
     this.registerView(VIEW_TYPE_ANNOTATED_PDF, (leaf) => new AnnotatedPdfView(leaf));
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", (leaf) => {
+        var _a2;
         if (!leaf)
           return;
-        const viewState = leaf.getViewState();
-        const file = this.app.workspace.getActiveFile();
-        if (!file || file.extension !== "pdf")
+        const root = this.app.workspace.rootSplit;
+        if (!root)
           return;
-        const markPath = file.path + ".mark";
+        let parent = leaf.parent;
+        let isInMainArea = false;
+        while (parent) {
+          if (parent === root) {
+            isInMainArea = true;
+            break;
+          }
+          parent = parent.parent;
+        }
+        if (!isInMainArea)
+          return;
+        const viewState = leaf.getViewState();
+        if (viewState.type !== "pdf")
+          return;
+        const filePath = (_a2 = viewState.state) == null ? void 0 : _a2.file;
+        if (!filePath || typeof filePath !== "string" || !filePath.endsWith(".pdf"))
+          return;
+        const markPath = filePath + ".mark";
         const markFile = this.app.vault.getAbstractFileByPath(markPath);
         if (markFile) {
-          if (viewState.type === VIEW_TYPE_ANNOTATED_PDF)
-            return;
           leaf.setViewState({
             type: VIEW_TYPE_ANNOTATED_PDF,
-            state: { file: file.path }
+            state: { file: filePath }
           });
         }
       })

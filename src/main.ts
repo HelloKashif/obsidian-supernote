@@ -771,23 +771,39 @@ export default class SupernoteViewerPlugin extends Plugin {
       this.app.workspace.on('active-leaf-change', (leaf) => {
         if (!leaf) return;
 
-        const viewState = leaf.getViewState();
-        const file = this.app.workspace.getActiveFile();
+        // Only handle leaves in the main editor area (root split), not sidebars
+        const root = this.app.workspace.rootSplit;
+        if (!root) return;
 
-        if (!file || file.extension !== 'pdf') return;
+        // Check if this leaf is a descendant of the root split (main area)
+        let parent = leaf.parent;
+        let isInMainArea = false;
+        while (parent) {
+          if (parent === root) {
+            isInMainArea = true;
+            break;
+          }
+          parent = (parent as any).parent;
+        }
+        if (!isInMainArea) return;
+
+        const viewState = leaf.getViewState();
+
+        // Only intercept if it's currently showing a PDF view (native PDF viewer)
+        if (viewState.type !== 'pdf') return;
+
+        const filePath = viewState.state?.file as string | undefined;
+        if (!filePath || typeof filePath !== 'string' || !filePath.endsWith('.pdf')) return;
 
         // Check if .mark file exists
-        const markPath = file.path + '.mark';
+        const markPath = filePath + '.mark';
         const markFile = this.app.vault.getAbstractFileByPath(markPath);
 
         if (markFile) {
-          // Check if already in our viewer to avoid loops
-          if (viewState.type === VIEW_TYPE_ANNOTATED_PDF) return;
-
           // Switch to our annotated PDF viewer
           leaf.setViewState({
             type: VIEW_TYPE_ANNOTATED_PDF,
-            state: { file: file.path },
+            state: { file: filePath },
           });
         }
       })

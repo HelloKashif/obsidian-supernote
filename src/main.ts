@@ -31,12 +31,22 @@ const DEFAULT_DATA: PluginData = {
   filePositions: {},
 };
 
+// In-memory cache for rendered images
+interface CacheEntry {
+  mtime: number;
+  images: string[];
+  totalPages: number;
+}
+
+const MAX_CACHE_ENTRIES = 10; // Limit memory usage
+
 class SupernoteView extends FileView {
   private viewContent: HTMLElement;
   private currentFile: TFile | null = null;
   private renderedImages: string[] = [];
   private plugin: SupernoteViewerPlugin;
   private renderGeneration: number = 0; // For cancelling stale renders
+  private fileChangeHandler: ((file: TFile) => void) | null = null;
 
   // View settings (loaded from plugin)
   private viewMode: ViewMode = 'single';
@@ -63,6 +73,19 @@ class SupernoteView extends FileView {
     this.plugin = plugin;
     this.viewContent = this.containerEl.children[1] as HTMLElement;
     this.loadSettings();
+    this.setupFileWatcher();
+  }
+
+  private setupFileWatcher(): void {
+    // Watch for file changes to auto-refresh
+    this.fileChangeHandler = (changedFile: TFile) => {
+      if (this.file && changedFile.path === this.file.path) {
+        // File was modified, invalidate cache and reload
+        this.plugin.invalidateCache(this.file.path);
+        this.onLoadFile(this.file);
+      }
+    };
+    this.app.vault.on('modify', this.fileChangeHandler);
   }
 
   private loadSettings(): void {
@@ -116,6 +139,37 @@ class SupernoteView extends FileView {
     // Load saved page position for this file
     const savedPage = this.loadFilePosition();
 
+    // Check cache first
+    const cachedEntry = this.plugin.getCachedImages(file.path, file.stat.mtime);
+
+    if (cachedEntry) {
+      // Use cached images - instant load!
+      this.renderedImages = cachedEntry.images;
+      this.totalPages = cachedEntry.totalPages;
+      this.currentPage = Math.min(savedPage, this.totalPages);
+
+      this.renderToolbar();
+      this.mainContainer = this.viewContent.createEl('div', { cls: 'supernote-main' });
+      this.renderThumbnailSidebar();
+      this.renderPagesFromCache(currentGeneration);
+
+      if (currentGeneration !== this.renderGeneration) return;
+
+      this.setupScrollObserver();
+
+      if (this.currentPage > 1) {
+        const pageEl = this.pageElements[this.currentPage - 1];
+        if (pageEl) {
+          pageEl.scrollIntoView({ behavior: 'instant', block: 'start' });
+        }
+      }
+
+      this.updateThumbnailHighlight();
+      this.populateThumbnailsAsync(currentGeneration);
+      return;
+    }
+
+    // No cache - render from scratch
     const loadingEl = this.viewContent.createEl('div', {
       cls: 'supernote-loading',
       text: 'Loading...',
@@ -153,6 +207,9 @@ class SupernoteView extends FileView {
       // Check if still current render
       if (currentGeneration !== this.renderGeneration) return;
 
+      // Cache the rendered images
+      this.plugin.setCachedImages(file.path, file.stat.mtime, this.renderedImages, this.totalPages);
+
       // Setup scroll observer
       this.setupScrollObserver();
 
@@ -179,6 +236,30 @@ class SupernoteView extends FileView {
         text: `Error loading file: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
       console.error('Supernote Viewer error:', error);
+    }
+  }
+
+  private renderPagesFromCache(generation: number): void {
+    if (!this.mainContainer) return;
+
+    this.contentArea = this.mainContainer.createEl('div', { cls: 'supernote-content' });
+
+    this.pagesContainer = this.contentArea.createEl('div', {
+      cls: `supernote-pages view-${this.viewMode} fit-${this.fitMode}`
+    });
+    this.pagesContainer.style.setProperty('--zoom-level', `${this.zoomLevel}%`);
+
+    for (let i = 0; i < this.renderedImages.length; i++) {
+      if (generation !== this.renderGeneration) return;
+
+      const pageContainer = this.pagesContainer.createEl('div', { cls: 'supernote-page' });
+      this.pageElements.push(pageContainer);
+
+      const img = pageContainer.createEl('img', {
+        cls: 'supernote-page-image',
+      });
+      img.src = this.renderedImages[i];
+      img.alt = `Page ${i + 1}`;
     }
   }
 
@@ -633,12 +714,19 @@ class SupernoteView extends FileView {
 
   async onClose(): Promise<void> {
     await this.saveFilePosition();
+    // Clean up file watcher
+    if (this.fileChangeHandler) {
+      this.app.vault.off('modify', this.fileChangeHandler);
+      this.fileChangeHandler = null;
+    }
     this.clearView();
   }
 }
 
 export default class SupernoteViewerPlugin extends Plugin {
   private data: PluginData = DEFAULT_DATA;
+  private imageCache: Map<string, CacheEntry> = new Map();
+  private cacheOrder: string[] = []; // Track insertion order for LRU eviction
 
   async onload(): Promise<void> {
     await this.loadPluginData();
@@ -649,6 +737,8 @@ export default class SupernoteViewerPlugin extends Plugin {
   }
 
   onunload(): void {
+    this.imageCache.clear();
+    this.cacheOrder = [];
     console.log('Supernote Viewer plugin unloaded');
   }
 
@@ -669,5 +759,36 @@ export default class SupernoteViewerPlugin extends Plugin {
   async saveData(data: PluginData): Promise<void> {
     this.data = data;
     await super.saveData(data);
+  }
+
+  // Cache methods
+  getCachedImages(filePath: string, mtime: number): CacheEntry | null {
+    const entry = this.imageCache.get(filePath);
+    if (entry && entry.mtime === mtime) {
+      // Move to end of order (most recently used)
+      this.cacheOrder = this.cacheOrder.filter(p => p !== filePath);
+      this.cacheOrder.push(filePath);
+      return entry;
+    }
+    return null;
+  }
+
+  setCachedImages(filePath: string, mtime: number, images: string[], totalPages: number): void {
+    // Evict oldest entries if cache is full
+    while (this.cacheOrder.length >= MAX_CACHE_ENTRIES) {
+      const oldest = this.cacheOrder.shift();
+      if (oldest) {
+        this.imageCache.delete(oldest);
+      }
+    }
+
+    this.imageCache.set(filePath, { mtime, images, totalPages });
+    this.cacheOrder = this.cacheOrder.filter(p => p !== filePath);
+    this.cacheOrder.push(filePath);
+  }
+
+  invalidateCache(filePath: string): void {
+    this.imageCache.delete(filePath);
+    this.cacheOrder = this.cacheOrder.filter(p => p !== filePath);
   }
 }

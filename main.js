@@ -326,6 +326,7 @@ var DEFAULT_DATA = {
   settings: DEFAULT_SETTINGS,
   filePositions: {}
 };
+var MAX_CACHE_ENTRIES = 10;
 var SupernoteView = class extends import_obsidian.FileView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -333,6 +334,7 @@ var SupernoteView = class extends import_obsidian.FileView {
     this.renderedImages = [];
     this.renderGeneration = 0;
     // For cancelling stale renders
+    this.fileChangeHandler = null;
     // View settings (loaded from plugin)
     this.viewMode = "single";
     this.fitMode = "width";
@@ -354,6 +356,16 @@ var SupernoteView = class extends import_obsidian.FileView {
     this.plugin = plugin;
     this.viewContent = this.containerEl.children[1];
     this.loadSettings();
+    this.setupFileWatcher();
+  }
+  setupFileWatcher() {
+    this.fileChangeHandler = (changedFile) => {
+      if (this.file && changedFile.path === this.file.path) {
+        this.plugin.invalidateCache(this.file.path);
+        this.onLoadFile(this.file);
+      }
+    };
+    this.app.vault.on("modify", this.fileChangeHandler);
   }
   loadSettings() {
     const settings = this.plugin.getData().settings;
@@ -398,6 +410,28 @@ var SupernoteView = class extends import_obsidian.FileView {
     this.clearView();
     this.currentFile = file;
     const savedPage = this.loadFilePosition();
+    const cachedEntry = this.plugin.getCachedImages(file.path, file.stat.mtime);
+    if (cachedEntry) {
+      this.renderedImages = cachedEntry.images;
+      this.totalPages = cachedEntry.totalPages;
+      this.currentPage = Math.min(savedPage, this.totalPages);
+      this.renderToolbar();
+      this.mainContainer = this.viewContent.createEl("div", { cls: "supernote-main" });
+      this.renderThumbnailSidebar();
+      this.renderPagesFromCache(currentGeneration);
+      if (currentGeneration !== this.renderGeneration)
+        return;
+      this.setupScrollObserver();
+      if (this.currentPage > 1) {
+        const pageEl = this.pageElements[this.currentPage - 1];
+        if (pageEl) {
+          pageEl.scrollIntoView({ behavior: "instant", block: "start" });
+        }
+      }
+      this.updateThumbnailHighlight();
+      this.populateThumbnailsAsync(currentGeneration);
+      return;
+    }
     const loadingEl = this.viewContent.createEl("div", {
       cls: "supernote-loading",
       text: "Loading..."
@@ -419,6 +453,7 @@ var SupernoteView = class extends import_obsidian.FileView {
       await this.renderPages(note, currentGeneration);
       if (currentGeneration !== this.renderGeneration)
         return;
+      this.plugin.setCachedImages(file.path, file.stat.mtime, this.renderedImages, this.totalPages);
       this.setupScrollObserver();
       if (this.currentPage > 1) {
         const pageEl = this.pageElements[this.currentPage - 1];
@@ -437,6 +472,26 @@ var SupernoteView = class extends import_obsidian.FileView {
         text: `Error loading file: ${error instanceof Error ? error.message : "Unknown error"}`
       });
       console.error("Supernote Viewer error:", error);
+    }
+  }
+  renderPagesFromCache(generation) {
+    if (!this.mainContainer)
+      return;
+    this.contentArea = this.mainContainer.createEl("div", { cls: "supernote-content" });
+    this.pagesContainer = this.contentArea.createEl("div", {
+      cls: `supernote-pages view-${this.viewMode} fit-${this.fitMode}`
+    });
+    this.pagesContainer.style.setProperty("--zoom-level", `${this.zoomLevel}%`);
+    for (let i = 0; i < this.renderedImages.length; i++) {
+      if (generation !== this.renderGeneration)
+        return;
+      const pageContainer = this.pagesContainer.createEl("div", { cls: "supernote-page" });
+      this.pageElements.push(pageContainer);
+      const img = pageContainer.createEl("img", {
+        cls: "supernote-page-image"
+      });
+      img.src = this.renderedImages[i];
+      img.alt = `Page ${i + 1}`;
     }
   }
   clearView() {
@@ -810,6 +865,10 @@ var SupernoteView = class extends import_obsidian.FileView {
   }
   async onClose() {
     await this.saveFilePosition();
+    if (this.fileChangeHandler) {
+      this.app.vault.off("modify", this.fileChangeHandler);
+      this.fileChangeHandler = null;
+    }
     this.clearView();
   }
 };
@@ -817,7 +876,10 @@ var SupernoteViewerPlugin = class extends import_obsidian.Plugin {
   constructor() {
     super(...arguments);
     this.data = DEFAULT_DATA;
+    this.imageCache = /* @__PURE__ */ new Map();
+    this.cacheOrder = [];
   }
+  // Track insertion order for LRU eviction
   async onload() {
     await this.loadPluginData();
     this.registerView(VIEW_TYPE_SUPERNOTE, (leaf) => new SupernoteView(leaf, this));
@@ -825,6 +887,8 @@ var SupernoteViewerPlugin = class extends import_obsidian.Plugin {
     console.log("Supernote Viewer plugin loaded");
   }
   onunload() {
+    this.imageCache.clear();
+    this.cacheOrder = [];
     console.log("Supernote Viewer plugin unloaded");
   }
   async loadPluginData() {
@@ -842,5 +906,30 @@ var SupernoteViewerPlugin = class extends import_obsidian.Plugin {
   async saveData(data) {
     this.data = data;
     await super.saveData(data);
+  }
+  // Cache methods
+  getCachedImages(filePath, mtime) {
+    const entry = this.imageCache.get(filePath);
+    if (entry && entry.mtime === mtime) {
+      this.cacheOrder = this.cacheOrder.filter((p) => p !== filePath);
+      this.cacheOrder.push(filePath);
+      return entry;
+    }
+    return null;
+  }
+  setCachedImages(filePath, mtime, images, totalPages) {
+    while (this.cacheOrder.length >= MAX_CACHE_ENTRIES) {
+      const oldest = this.cacheOrder.shift();
+      if (oldest) {
+        this.imageCache.delete(oldest);
+      }
+    }
+    this.imageCache.set(filePath, { mtime, images, totalPages });
+    this.cacheOrder = this.cacheOrder.filter((p) => p !== filePath);
+    this.cacheOrder.push(filePath);
+  }
+  invalidateCache(filePath) {
+    this.imageCache.delete(filePath);
+    this.cacheOrder = this.cacheOrder.filter((p) => p !== filePath);
   }
 };

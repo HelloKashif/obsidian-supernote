@@ -32141,11 +32141,18 @@ var AnnotatedPdfView = class extends import_obsidian.FileView {
           const overlayContainer = pageContainer.createEl("div", { cls: "annotation-overlay-container" });
           overlayContainer.style.width = `${viewport.width}px`;
           overlayContainer.style.height = `${viewport.height}px`;
-          const overlay = overlayContainer.createEl("img", {
-            cls: "annotation-overlay",
-            attr: { src: this.annotationCache[pageNum] }
+          const overlayCanvas = overlayContainer.createEl("canvas", {
+            cls: "annotation-overlay"
           });
-          overlay.style.display = this.showAnnotations ? "block" : "none";
+          overlayCanvas.width = viewport.width;
+          overlayCanvas.height = viewport.height;
+          overlayCanvas.style.display = this.showAnnotations ? "block" : "none";
+          const img = new Image();
+          img.onload = () => {
+            const octx = overlayCanvas.getContext("2d");
+            octx.drawImage(img, 0, 0, viewport.width, viewport.height);
+          };
+          img.src = this.annotationCache[pageNum];
         }
         pageContainer.createEl("div", {
           cls: "pdf-page-number",

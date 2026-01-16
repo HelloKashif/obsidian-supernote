@@ -353,65 +353,6 @@ function imageDataToDataUrl(imageData) {
 var import_obsidian = require("obsidian");
 
 // node_modules/pdfjs-dist/build/pdf.mjs
-var pdf_exports = {};
-__export(pdf_exports, {
-  AbortException: () => AbortException,
-  AnnotationEditorLayer: () => AnnotationEditorLayer,
-  AnnotationEditorParamsType: () => AnnotationEditorParamsType,
-  AnnotationEditorType: () => AnnotationEditorType,
-  AnnotationEditorUIManager: () => AnnotationEditorUIManager,
-  AnnotationLayer: () => AnnotationLayer,
-  AnnotationMode: () => AnnotationMode,
-  AnnotationType: () => AnnotationType,
-  CSSConstants: () => CSSConstants,
-  ColorPicker: () => ColorPicker,
-  DOMSVGFactory: () => DOMSVGFactory,
-  DrawLayer: () => DrawLayer,
-  FeatureTest: () => util_FeatureTest,
-  GlobalWorkerOptions: () => GlobalWorkerOptions,
-  ImageKind: () => util_ImageKind,
-  InvalidPDFException: () => InvalidPDFException,
-  MathClamp: () => MathClamp,
-  OPS: () => OPS,
-  OutputScale: () => OutputScale,
-  PDFDataRangeTransport: () => PDFDataRangeTransport,
-  PDFDateString: () => PDFDateString,
-  PDFWorker: () => PDFWorker,
-  PasswordResponses: () => PasswordResponses,
-  PermissionFlag: () => PermissionFlag,
-  PixelsPerInch: () => PixelsPerInch,
-  RenderingCancelledException: () => RenderingCancelledException,
-  ResponseException: () => ResponseException,
-  SignatureExtractor: () => SignatureExtractor,
-  SupportedImageMimeTypes: () => SupportedImageMimeTypes,
-  TextLayer: () => TextLayer,
-  TouchManager: () => TouchManager,
-  Util: () => Util,
-  VerbosityLevel: () => VerbosityLevel,
-  XfaLayer: () => XfaLayer,
-  applyOpacity: () => applyOpacity,
-  build: () => build,
-  createValidAbsoluteUrl: () => createValidAbsoluteUrl,
-  fetchData: () => fetchData,
-  findContrastColor: () => findContrastColor,
-  getDocument: () => getDocument,
-  getFilenameFromUrl: () => getFilenameFromUrl,
-  getPdfFilenameFromUrl: () => getPdfFilenameFromUrl,
-  getRGB: () => getRGB,
-  getUuid: () => getUuid,
-  getXfaPageViewport: () => getXfaPageViewport,
-  isDataScheme: () => isDataScheme,
-  isPdfFile: () => isPdfFile,
-  isValidExplicitDest: () => isValidExplicitDest,
-  noContextMenu: () => noContextMenu,
-  normalizeUnicode: () => normalizeUnicode,
-  renderRichText: () => renderRichText,
-  setLayerDimensions: () => setLayerDimensions,
-  shadow: () => shadow,
-  stopEvent: () => stopEvent,
-  updateUrlHash: () => updateUrlHash,
-  version: () => version
-});
 var import_meta = {};
 var __webpack_require__ = {};
 (() => {
@@ -27745,14 +27686,7 @@ function getAnnotatedPageNumbers(mark) {
 }
 
 // src/pdf-view.ts
-GlobalWorkerOptions.workerSrc = "";
-var pdfjsLibAny = pdf_exports;
-if (pdfjsLibAny.disableWorker !== void 0) {
-  pdfjsLibAny.disableWorker = true;
-}
-if (pdfjsLibAny.isEvalSupported !== void 0) {
-  pdfjsLibAny.isEvalSupported = false;
-}
+GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs";
 var VIEW_TYPE_ANNOTATED_PDF = "supernote-pdf-viewer";
 var AnnotatedPdfView = class extends import_obsidian.FileView {
   constructor(leaf) {

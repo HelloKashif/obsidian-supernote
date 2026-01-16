@@ -190,8 +190,14 @@ export function parseTotalPath(totalPath: string | null): { width: number; heigh
 
 // Annotation dimensions based on device
 export function getAnnotationDimensions(equipment: string): { width: number; height: number } {
-  // Standard Supernote dimensions
+  const eq = equipment.toLowerCase();
+
+  // A6X and A6X2 have smaller screens
+  if (eq.includes('a6x') || eq.includes('nomad')) {
+    return { width: 1080, height: 1440 };
+  }
+
+  // A5X, A5X2, and others use standard dimensions
   // A5X/A5X2: 1404 x 1872
-  // A6X/A6X2 (N6): 1404 x 1872 (Nomad uses same aspect ratio)
   return { width: 1404, height: 1872 };
 }

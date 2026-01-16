@@ -90,13 +90,19 @@ export function renderAnnotationLayer(
 
   // Try to get dimensions from the first layer's TOTALPATH
   let dims = getAnnotationDimensions(mark.equipment);
+  console.log(`[mark-renderer] Equipment: ${mark.equipment}, default dims: ${dims.width}x${dims.height}`);
+
   for (const layer of page.layers) {
+    console.log(`[mark-renderer] Layer ${layer.name}, totalPath: ${layer.totalPath}`);
     const layerDims = parseTotalPath(layer.totalPath);
     if (layerDims) {
+      console.log(`[mark-renderer] Parsed dims from TOTALPATH: ${layerDims.width}x${layerDims.height}`);
       dims = layerDims;
       break;
     }
   }
+
+  console.log(`[mark-renderer] Using dims: ${dims.width}x${dims.height}`);
 
   // Create composite canvas for all layers
   const canvas = document.createElement('canvas');

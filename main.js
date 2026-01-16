@@ -27603,6 +27603,10 @@ function parseTotalPath(totalPath) {
   return null;
 }
 function getAnnotationDimensions(equipment) {
+  const eq = equipment.toLowerCase();
+  if (eq.includes("a6x") || eq.includes("nomad")) {
+    return { width: 1080, height: 1440 };
+  }
   return { width: 1404, height: 1872 };
 }
 
@@ -27668,13 +27672,17 @@ function renderAnnotationLayer(mark, pageNumber) {
     return null;
   }
   let dims = getAnnotationDimensions(mark.equipment);
+  console.log(`[mark-renderer] Equipment: ${mark.equipment}, default dims: ${dims.width}x${dims.height}`);
   for (const layer of page.layers) {
+    console.log(`[mark-renderer] Layer ${layer.name}, totalPath: ${layer.totalPath}`);
     const layerDims = parseTotalPath(layer.totalPath);
     if (layerDims) {
+      console.log(`[mark-renderer] Parsed dims from TOTALPATH: ${layerDims.width}x${layerDims.height}`);
       dims = layerDims;
       break;
     }
   }
+  console.log(`[mark-renderer] Using dims: ${dims.width}x${dims.height}`);
   const canvas = document.createElement("canvas");
   canvas.width = dims.width;
   canvas.height = dims.height;

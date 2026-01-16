@@ -3,7 +3,8 @@
   "name": "Supernote Viewer",
   "version": "1.0.0",
   "minAppVersion": "1.0.0",
-  "description": "Viewer for Supernote .note files and PDF annotations (.mark files)",
+  "description": "View and navigate Supernote .note files directly in Obsidian with thumbnails, zoom, and dark mode support",
   "author": "Kashif",
+  "authorUrl": "https://github.com/HelloKashif",
   "isDesktopOnly": false
 }

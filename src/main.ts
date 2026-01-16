@@ -1,7 +1,6 @@
 import { Plugin, TFile, WorkspaceLeaf, FileView, Menu } from 'obsidian';
 import { parseSupernoteFile, SupernoteFile } from './parser';
 import { renderPage, imageDataToDataUrl } from './renderer';
-import { AnnotatedPdfView, VIEW_TYPE_ANNOTATED_PDF } from './pdf-view';
 
 const VIEW_TYPE_SUPERNOTE = 'supernote-viewer';
 
@@ -758,82 +757,8 @@ export default class SupernoteViewerPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadPluginData();
 
-    // Register .note file viewer
     this.registerView(VIEW_TYPE_SUPERNOTE, (leaf) => new SupernoteView(leaf, this));
     this.registerExtensions(['note'], VIEW_TYPE_SUPERNOTE);
-
-    // Register annotated PDF viewer (but don't register for PDF extension - we use file menu)
-    this.registerView(VIEW_TYPE_ANNOTATED_PDF, (leaf) => new AnnotatedPdfView(leaf));
-
-    // Auto-detect PDFs with annotations and open in our viewer
-    // Use active-leaf-change for more reliable detection when switching files
-    this.registerEvent(
-      this.app.workspace.on('active-leaf-change', (leaf) => {
-        if (!leaf) return;
-
-        // Only handle leaves in the main editor area (root split), not sidebars
-        const root = this.app.workspace.rootSplit;
-        if (!root) return;
-
-        // Check if this leaf is a descendant of the root split (main area)
-        let parent = leaf.parent;
-        let isInMainArea = false;
-        while (parent) {
-          if (parent === root) {
-            isInMainArea = true;
-            break;
-          }
-          parent = (parent as any).parent;
-        }
-        if (!isInMainArea) return;
-
-        const viewState = leaf.getViewState();
-
-        // Only intercept if it's currently showing a PDF view (native PDF viewer)
-        if (viewState.type !== 'pdf') return;
-
-        const filePath = viewState.state?.file as string | undefined;
-        if (!filePath || typeof filePath !== 'string' || !filePath.endsWith('.pdf')) return;
-
-        // Check if .mark file exists
-        const markPath = filePath + '.mark';
-        const markFile = this.app.vault.getAbstractFileByPath(markPath);
-
-        if (markFile) {
-          // Switch to our annotated PDF viewer
-          leaf.setViewState({
-            type: VIEW_TYPE_ANNOTATED_PDF,
-            state: { file: filePath },
-          });
-        }
-      })
-    );
-
-    // Also add file menu option for manual access
-    this.registerEvent(
-      this.app.workspace.on('file-menu', (menu, file) => {
-        if (file instanceof TFile && file.extension === 'pdf') {
-          // Check if .mark file exists
-          const markPath = file.path + '.mark';
-          const markFile = this.app.vault.getAbstractFileByPath(markPath);
-
-          if (markFile) {
-            menu.addItem((item) => {
-              item.setTitle('Open with annotations')
-                .setIcon('pencil')
-                .onClick(async () => {
-                  const leaf = this.app.workspace.getLeaf();
-                  await leaf.setViewState({
-                    type: VIEW_TYPE_ANNOTATED_PDF,
-                    state: { file: file.path },
-                  });
-                });
-            });
-          }
-        }
-      })
-    );
-
     console.log('Supernote Viewer plugin loaded');
   }
 

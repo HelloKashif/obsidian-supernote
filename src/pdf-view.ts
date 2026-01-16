@@ -8,8 +8,17 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { parseMarkFile, MarkFile, getAnnotationDimensions } from './mark-parser';
 import { renderAnnotationLayer, annotationToDataUrl, getAnnotatedPageNumbers } from './mark-renderer';
 
-// Set worker path for pdf.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+// Disable worker for Obsidian compatibility - avoids CORS/CSP issues
+// This runs pdf.js in the main thread (slightly slower but more reliable)
+(pdfjsLib as any).GlobalWorkerOptions.workerSrc = '';
+const pdfjsLibAny = pdfjsLib as any;
+if (pdfjsLibAny.disableWorker !== undefined) {
+  pdfjsLibAny.disableWorker = true;
+}
+// For pdf.js 5.x, we can use the legacy build or set isEvalSupported
+if (pdfjsLibAny.isEvalSupported !== undefined) {
+  pdfjsLibAny.isEvalSupported = false;
+}
 
 export const VIEW_TYPE_ANNOTATED_PDF = 'supernote-pdf-viewer';
 

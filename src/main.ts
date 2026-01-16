@@ -736,9 +736,59 @@ export default class SupernoteViewerPlugin extends Plugin {
     this.registerView(VIEW_TYPE_SUPERNOTE, (leaf) => new SupernoteView(leaf, this));
     this.registerExtensions(['note'], VIEW_TYPE_SUPERNOTE);
 
-    // Register PDF viewer with annotation support
+    // Register annotated PDF viewer (but don't register for PDF extension - we use file menu)
     this.registerView(VIEW_TYPE_ANNOTATED_PDF, (leaf) => new AnnotatedPdfView(leaf));
-    this.registerExtensions(['pdf'], VIEW_TYPE_ANNOTATED_PDF);
+
+    // Auto-detect PDFs with annotations and open in our viewer
+    this.registerEvent(
+      this.app.workspace.on('file-open', (file) => {
+        if (!file || file.extension !== 'pdf') return;
+
+        // Check if .mark file exists
+        const markPath = file.path + '.mark';
+        const markFile = this.app.vault.getAbstractFileByPath(markPath);
+
+        if (markFile) {
+          // Get the current leaf
+          const leaf = this.app.workspace.getLeaf(false);
+          if (!leaf) return;
+
+          // Check if already in our viewer to avoid loops
+          if (leaf.view.getViewType() === VIEW_TYPE_ANNOTATED_PDF) return;
+
+          // Switch to our annotated PDF viewer
+          leaf.setViewState({
+            type: VIEW_TYPE_ANNOTATED_PDF,
+            state: { file: file.path },
+          });
+        }
+      })
+    );
+
+    // Also add file menu option for manual access
+    this.registerEvent(
+      this.app.workspace.on('file-menu', (menu, file) => {
+        if (file instanceof TFile && file.extension === 'pdf') {
+          // Check if .mark file exists
+          const markPath = file.path + '.mark';
+          const markFile = this.app.vault.getAbstractFileByPath(markPath);
+
+          if (markFile) {
+            menu.addItem((item) => {
+              item.setTitle('Open with annotations')
+                .setIcon('pencil')
+                .onClick(async () => {
+                  const leaf = this.app.workspace.getLeaf();
+                  await leaf.setViewState({
+                    type: VIEW_TYPE_ANNOTATED_PDF,
+                    state: { file: file.path },
+                  });
+                });
+            });
+          }
+        }
+      })
+    );
 
     console.log('Supernote Viewer plugin loaded');
   }

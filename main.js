@@ -353,6 +353,65 @@ function imageDataToDataUrl(imageData) {
 var import_obsidian = require("obsidian");
 
 // node_modules/pdfjs-dist/build/pdf.mjs
+var pdf_exports = {};
+__export(pdf_exports, {
+  AbortException: () => AbortException,
+  AnnotationEditorLayer: () => AnnotationEditorLayer,
+  AnnotationEditorParamsType: () => AnnotationEditorParamsType,
+  AnnotationEditorType: () => AnnotationEditorType,
+  AnnotationEditorUIManager: () => AnnotationEditorUIManager,
+  AnnotationLayer: () => AnnotationLayer,
+  AnnotationMode: () => AnnotationMode,
+  AnnotationType: () => AnnotationType,
+  CSSConstants: () => CSSConstants,
+  ColorPicker: () => ColorPicker,
+  DOMSVGFactory: () => DOMSVGFactory,
+  DrawLayer: () => DrawLayer,
+  FeatureTest: () => util_FeatureTest,
+  GlobalWorkerOptions: () => GlobalWorkerOptions,
+  ImageKind: () => util_ImageKind,
+  InvalidPDFException: () => InvalidPDFException,
+  MathClamp: () => MathClamp,
+  OPS: () => OPS,
+  OutputScale: () => OutputScale,
+  PDFDataRangeTransport: () => PDFDataRangeTransport,
+  PDFDateString: () => PDFDateString,
+  PDFWorker: () => PDFWorker,
+  PasswordResponses: () => PasswordResponses,
+  PermissionFlag: () => PermissionFlag,
+  PixelsPerInch: () => PixelsPerInch,
+  RenderingCancelledException: () => RenderingCancelledException,
+  ResponseException: () => ResponseException,
+  SignatureExtractor: () => SignatureExtractor,
+  SupportedImageMimeTypes: () => SupportedImageMimeTypes,
+  TextLayer: () => TextLayer,
+  TouchManager: () => TouchManager,
+  Util: () => Util,
+  VerbosityLevel: () => VerbosityLevel,
+  XfaLayer: () => XfaLayer,
+  applyOpacity: () => applyOpacity,
+  build: () => build,
+  createValidAbsoluteUrl: () => createValidAbsoluteUrl,
+  fetchData: () => fetchData,
+  findContrastColor: () => findContrastColor,
+  getDocument: () => getDocument,
+  getFilenameFromUrl: () => getFilenameFromUrl,
+  getPdfFilenameFromUrl: () => getPdfFilenameFromUrl,
+  getRGB: () => getRGB,
+  getUuid: () => getUuid,
+  getXfaPageViewport: () => getXfaPageViewport,
+  isDataScheme: () => isDataScheme,
+  isPdfFile: () => isPdfFile,
+  isValidExplicitDest: () => isValidExplicitDest,
+  noContextMenu: () => noContextMenu,
+  normalizeUnicode: () => normalizeUnicode,
+  renderRichText: () => renderRichText,
+  setLayerDimensions: () => setLayerDimensions,
+  shadow: () => shadow,
+  stopEvent: () => stopEvent,
+  updateUrlHash: () => updateUrlHash,
+  version: () => version
+});
 var import_meta = {};
 var __webpack_require__ = {};
 (() => {
@@ -27686,7 +27745,14 @@ function getAnnotatedPageNumbers(mark) {
 }
 
 // src/pdf-view.ts
-GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
+GlobalWorkerOptions.workerSrc = "";
+var pdfjsLibAny = pdf_exports;
+if (pdfjsLibAny.disableWorker !== void 0) {
+  pdfjsLibAny.disableWorker = true;
+}
+if (pdfjsLibAny.isEvalSupported !== void 0) {
+  pdfjsLibAny.isEvalSupported = false;
+}
 var VIEW_TYPE_ANNOTATED_PDF = "supernote-pdf-viewer";
 var AnnotatedPdfView = class extends import_obsidian.FileView {
   constructor(leaf) {
@@ -28472,7 +28538,44 @@ var SupernoteViewerPlugin = class extends import_obsidian2.Plugin {
     this.registerView(VIEW_TYPE_SUPERNOTE, (leaf) => new SupernoteView(leaf, this));
     this.registerExtensions(["note"], VIEW_TYPE_SUPERNOTE);
     this.registerView(VIEW_TYPE_ANNOTATED_PDF, (leaf) => new AnnotatedPdfView(leaf));
-    this.registerExtensions(["pdf"], VIEW_TYPE_ANNOTATED_PDF);
+    this.registerEvent(
+      this.app.workspace.on("file-open", (file) => {
+        if (!file || file.extension !== "pdf")
+          return;
+        const markPath = file.path + ".mark";
+        const markFile = this.app.vault.getAbstractFileByPath(markPath);
+        if (markFile) {
+          const leaf = this.app.workspace.getLeaf(false);
+          if (!leaf)
+            return;
+          if (leaf.view.getViewType() === VIEW_TYPE_ANNOTATED_PDF)
+            return;
+          leaf.setViewState({
+            type: VIEW_TYPE_ANNOTATED_PDF,
+            state: { file: file.path }
+          });
+        }
+      })
+    );
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu, file) => {
+        if (file instanceof import_obsidian2.TFile && file.extension === "pdf") {
+          const markPath = file.path + ".mark";
+          const markFile = this.app.vault.getAbstractFileByPath(markPath);
+          if (markFile) {
+            menu.addItem((item) => {
+              item.setTitle("Open with annotations").setIcon("pencil").onClick(async () => {
+                const leaf = this.app.workspace.getLeaf();
+                await leaf.setViewState({
+                  type: VIEW_TYPE_ANNOTATED_PDF,
+                  state: { file: file.path }
+                });
+              });
+            });
+          }
+        }
+      })
+    );
     console.log("Supernote Viewer plugin loaded");
   }
   onunload() {

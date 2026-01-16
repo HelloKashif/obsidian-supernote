@@ -342,6 +342,7 @@ var SupernoteView = class extends import_obsidian.FileView {
     this.totalPages = 0;
     // DOM elements
     this.pagesContainer = null;
+    this.contentArea = null;
     this.pageElements = [];
     this.pageDisplay = null;
     this.pageInput = null;
@@ -447,6 +448,7 @@ var SupernoteView = class extends import_obsidian.FileView {
     this.renderedImages = [];
     this.currentFile = null;
     this.pagesContainer = null;
+    this.contentArea = null;
     this.pageElements = [];
     this.pageDisplay = null;
     this.pageInput = null;
@@ -725,28 +727,34 @@ var SupernoteView = class extends import_obsidian.FileView {
     this.pagesContainer.addClass(`fit-${this.fitMode}`);
   }
   setupScrollObserver() {
-    if (!this.pagesContainer)
+    if (!this.contentArea)
       return;
     if (this.scrollObserver) {
       this.scrollObserver.disconnect();
     }
     this.scrollObserver = new IntersectionObserver(
       (entries) => {
+        let mostVisibleEntry = null;
+        let maxRatio = 0;
         for (const entry of entries) {
-          if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
-            const pageIndex = this.pageElements.indexOf(entry.target);
-            if (pageIndex !== -1) {
-              this.currentPage = pageIndex + 1;
-              this.updatePageDisplay();
-              this.updateThumbnailHighlight();
-              this.debouncedSavePosition();
-            }
+          if (entry.isIntersecting && entry.intersectionRatio > maxRatio) {
+            maxRatio = entry.intersectionRatio;
+            mostVisibleEntry = entry;
+          }
+        }
+        if (mostVisibleEntry) {
+          const pageIndex = this.pageElements.indexOf(mostVisibleEntry.target);
+          if (pageIndex !== -1 && this.currentPage !== pageIndex + 1) {
+            this.currentPage = pageIndex + 1;
+            this.updatePageDisplay();
+            this.updateThumbnailHighlight();
+            this.debouncedSavePosition();
           }
         }
       },
       {
-        root: this.pagesContainer,
-        threshold: 0.5
+        root: this.contentArea,
+        threshold: [0, 0.25, 0.5, 0.75, 1]
       }
     );
     this.pageElements.forEach((el) => {
@@ -765,8 +773,8 @@ var SupernoteView = class extends import_obsidian.FileView {
   async renderPages(note, generation) {
     if (!this.mainContainer)
       return;
-    const contentArea = this.mainContainer.createEl("div", { cls: "supernote-content" });
-    this.pagesContainer = contentArea.createEl("div", {
+    this.contentArea = this.mainContainer.createEl("div", { cls: "supernote-content" });
+    this.pagesContainer = this.contentArea.createEl("div", {
       cls: `supernote-pages view-${this.viewMode} fit-${this.fitMode}`
     });
     this.pagesContainer.style.setProperty("--zoom-level", `${this.zoomLevel}%`);
@@ -775,10 +783,6 @@ var SupernoteView = class extends import_obsidian.FileView {
         return;
       const pageContainer = this.pagesContainer.createEl("div", { cls: "supernote-page" });
       this.pageElements.push(pageContainer);
-      pageContainer.createEl("div", {
-        cls: "supernote-page-number",
-        text: `${i + 1}`
-      });
       try {
         const imageData = renderPage(note, i);
         if (imageData) {

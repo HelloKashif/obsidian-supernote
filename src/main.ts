@@ -49,6 +49,7 @@ class SupernoteView extends FileView {
 
   // DOM elements
   private pagesContainer: HTMLElement | null = null;
+  private contentArea: HTMLElement | null = null;
   private pageElements: HTMLElement[] = [];
   private pageDisplay: HTMLElement | null = null;
   private pageInput: HTMLInputElement | null = null;
@@ -192,6 +193,7 @@ class SupernoteView extends FileView {
     this.renderedImages = [];
     this.currentFile = null;
     this.pagesContainer = null;
+    this.contentArea = null;
     this.pageElements = [];
     this.pageDisplay = null;
     this.pageInput = null;
@@ -530,7 +532,7 @@ class SupernoteView extends FileView {
   }
 
   private setupScrollObserver(): void {
-    if (!this.pagesContainer) return;
+    if (!this.contentArea) return;
 
     // Disconnect previous observer if exists
     if (this.scrollObserver) {
@@ -539,22 +541,31 @@ class SupernoteView extends FileView {
 
     this.scrollObserver = new IntersectionObserver(
       (entries) => {
+        // Find the most visible page
+        let mostVisibleEntry: IntersectionObserverEntry | null = null;
+        let maxRatio = 0;
+
         for (const entry of entries) {
-          if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
-            const pageIndex = this.pageElements.indexOf(entry.target as HTMLElement);
-            if (pageIndex !== -1) {
-              this.currentPage = pageIndex + 1;
-              this.updatePageDisplay();
-              this.updateThumbnailHighlight();
-              // Debounce saving position to avoid too many writes
-              this.debouncedSavePosition();
-            }
+          if (entry.isIntersecting && entry.intersectionRatio > maxRatio) {
+            maxRatio = entry.intersectionRatio;
+            mostVisibleEntry = entry;
+          }
+        }
+
+        if (mostVisibleEntry) {
+          const pageIndex = this.pageElements.indexOf(mostVisibleEntry.target as HTMLElement);
+          if (pageIndex !== -1 && this.currentPage !== pageIndex + 1) {
+            this.currentPage = pageIndex + 1;
+            this.updatePageDisplay();
+            this.updateThumbnailHighlight();
+            // Debounce saving position to avoid too many writes
+            this.debouncedSavePosition();
           }
         }
       },
       {
-        root: this.pagesContainer,
-        threshold: 0.5,
+        root: this.contentArea,
+        threshold: [0, 0.25, 0.5, 0.75, 1],
       }
     );
 
@@ -575,9 +586,9 @@ class SupernoteView extends FileView {
     if (!this.mainContainer) return;
 
     // Content area
-    const contentArea = this.mainContainer.createEl('div', { cls: 'supernote-content' });
+    this.contentArea = this.mainContainer.createEl('div', { cls: 'supernote-content' });
 
-    this.pagesContainer = contentArea.createEl('div', {
+    this.pagesContainer = this.contentArea.createEl('div', {
       cls: `supernote-pages view-${this.viewMode} fit-${this.fitMode}`
     });
     this.pagesContainer.style.setProperty('--zoom-level', `${this.zoomLevel}%`);
@@ -588,11 +599,6 @@ class SupernoteView extends FileView {
 
       const pageContainer = this.pagesContainer.createEl('div', { cls: 'supernote-page' });
       this.pageElements.push(pageContainer);
-
-      pageContainer.createEl('div', {
-        cls: 'supernote-page-number',
-        text: `${i + 1}`,
-      });
 
       try {
         const imageData = renderPage(note, i);

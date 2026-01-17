@@ -1,4 +1,4 @@
-import { Plugin, TFile, WorkspaceLeaf, FileView, Menu } from 'obsidian';
+import { Plugin, TFile, WorkspaceLeaf, FileView, Menu, setIcon } from 'obsidian';
 import { parseSupernoteFile, SupernoteFile } from './parser';
 import { renderPage, imageDataToDataUrl } from './renderer';
 
@@ -85,7 +85,7 @@ class SupernoteView extends FileView {
       if (this.file && changedFile.path === this.file.path) {
         // File was modified, invalidate cache and reload
         this.plugin.invalidateCache(this.file.path);
-        this.onLoadFile(this.file);
+        void this.onLoadFile(this.file);
       }
     };
     this.app.vault.on('modify', this.fileChangeHandler);
@@ -171,7 +171,7 @@ class SupernoteView extends FileView {
       }
 
       this.updateThumbnailHighlight();
-      this.populateThumbnailsAsync(currentGeneration);
+      void this.populateThumbnailsAsync(currentGeneration);
       return;
     }
 
@@ -233,7 +233,7 @@ class SupernoteView extends FileView {
       this.updateThumbnailHighlight();
 
       // Populate thumbnails in the background (don't await)
-      this.populateThumbnailsAsync(currentGeneration);
+      void this.populateThumbnailsAsync(currentGeneration);
 
     } catch (error) {
       if (currentGeneration !== this.renderGeneration) return;
@@ -300,7 +300,7 @@ class SupernoteView extends FileView {
       cls: 'supernote-toolbar-btn clickable-icon',
       attr: { 'aria-label': 'Toggle thumbnails' },
     });
-    thumbnailBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>';
+    setIcon(thumbnailBtn, 'layout-grid');
     thumbnailBtn.addEventListener('click', () => this.toggleThumbnails());
 
     // Center section: Page navigation
@@ -310,14 +310,14 @@ class SupernoteView extends FileView {
       cls: 'supernote-toolbar-btn clickable-icon',
       attr: { 'aria-label': 'Previous page' },
     });
-    prevBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+    setIcon(prevBtn, 'chevron-up');
     prevBtn.addEventListener('click', () => this.goToPrevPage());
 
     const nextBtn = navSection.createEl('button', {
       cls: 'supernote-toolbar-btn clickable-icon',
       attr: { 'aria-label': 'Next page' },
     });
-    nextBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+    setIcon(nextBtn, 'chevron-down');
     nextBtn.addEventListener('click', () => this.goToNextPage());
 
     // Page display container with input
@@ -352,14 +352,14 @@ class SupernoteView extends FileView {
       cls: 'supernote-toolbar-btn clickable-icon',
       attr: { 'aria-label': 'Zoom out' },
     });
-    zoomOutBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>';
+    setIcon(zoomOutBtn, 'zoom-out');
     zoomOutBtn.addEventListener('click', () => this.zoomOut());
 
     const zoomInBtn = zoomSection.createEl('button', {
       cls: 'supernote-toolbar-btn clickable-icon',
       attr: { 'aria-label': 'Zoom in' },
     });
-    zoomInBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>';
+    setIcon(zoomInBtn, 'zoom-in');
     zoomInBtn.addEventListener('click', () => this.zoomIn());
 
     // Options dropdown
@@ -369,7 +369,7 @@ class SupernoteView extends FileView {
       cls: 'supernote-toolbar-btn clickable-icon',
       attr: { 'aria-label': 'View options' },
     });
-    optionsBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+    setIcon(optionsBtn, 'chevron-down');
     optionsBtn.addEventListener('click', (e) => this.showOptionsMenu(e));
   }
 
@@ -421,7 +421,7 @@ class SupernoteView extends FileView {
     if (sidebar) {
       sidebar.toggleClass('hidden', !this.showThumbnails);
     }
-    this.saveSettings();
+    void this.saveSettings();
   }
 
   private async populateThumbnailsAsync(generation: number): Promise<void> {
@@ -448,7 +448,7 @@ class SupernoteView extends FileView {
         this.scrollToPage(this.currentPage);
         this.updatePageDisplay();
         this.updateThumbnailHighlight();
-        this.saveFilePosition();
+        void this.saveFilePosition();
       });
 
       this.thumbnailElements.push(thumbWrapper);
@@ -500,7 +500,7 @@ class SupernoteView extends FileView {
       item.onClick(() => {
         this.fitMode = 'width';
         this.applyViewSettings();
-        this.saveSettings();
+        void this.saveSettings();
       });
     });
 
@@ -510,7 +510,7 @@ class SupernoteView extends FileView {
       item.onClick(() => {
         this.fitMode = 'height';
         this.applyViewSettings();
-        this.saveSettings();
+        void this.saveSettings();
       });
     });
 
@@ -522,7 +522,7 @@ class SupernoteView extends FileView {
       item.onClick(() => {
         this.viewMode = 'single';
         this.applyViewSettings();
-        this.saveSettings();
+        void this.saveSettings();
       });
     });
 
@@ -532,7 +532,7 @@ class SupernoteView extends FileView {
       item.onClick(() => {
         this.viewMode = 'two-page';
         this.applyViewSettings();
-        this.saveSettings();
+        void this.saveSettings();
       });
     });
 
@@ -544,7 +544,7 @@ class SupernoteView extends FileView {
       item.onClick(() => {
         this.adaptToTheme = !this.adaptToTheme;
         this.applyThemeAdaptation();
-        this.saveSettings();
+        void this.saveSettings();
       });
     });
 
@@ -564,7 +564,7 @@ class SupernoteView extends FileView {
       this.scrollToPage(this.currentPage);
       this.updatePageDisplay();
       this.updateThumbnailHighlight();
-      this.saveFilePosition();
+      void this.saveFilePosition();
     }
   }
 
@@ -574,7 +574,7 @@ class SupernoteView extends FileView {
       this.scrollToPage(this.currentPage);
       this.updatePageDisplay();
       this.updateThumbnailHighlight();
-      this.saveFilePosition();
+      void this.saveFilePosition();
     }
   }
 
@@ -599,7 +599,7 @@ class SupernoteView extends FileView {
       this.currentPage = value;
       this.scrollToPage(this.currentPage);
       this.updateThumbnailHighlight();
-      this.saveFilePosition();
+      void this.saveFilePosition();
     } else {
       // Reset to current page if invalid
       this.pageInput.value = String(this.currentPage);
@@ -610,7 +610,7 @@ class SupernoteView extends FileView {
     if (this.zoomLevel < 200) {
       this.zoomLevel += 25;
       this.applyZoom();
-      this.saveSettings();
+      void this.saveSettings();
     }
   }
 
@@ -618,7 +618,7 @@ class SupernoteView extends FileView {
     if (this.zoomLevel > 50) {
       this.zoomLevel -= 25;
       this.applyZoom();
-      this.saveSettings();
+      void this.saveSettings();
     }
   }
 
@@ -685,7 +685,7 @@ class SupernoteView extends FileView {
       window.clearTimeout(this.savePositionTimeout);
     }
     this.savePositionTimeout = window.setTimeout(() => {
-      this.saveFilePosition();
+      void this.saveFilePosition();
     }, 500);
   }
 
@@ -759,13 +759,13 @@ export default class SupernoteViewerPlugin extends Plugin {
 
     this.registerView(VIEW_TYPE_SUPERNOTE, (leaf) => new SupernoteView(leaf, this));
     this.registerExtensions(['note'], VIEW_TYPE_SUPERNOTE);
-    console.log('Supernote Viewer plugin loaded');
+    console.debug('Supernote Viewer plugin loaded');
   }
 
   onunload(): void {
     this.imageCache.clear();
     this.cacheOrder = [];
-    console.log('Supernote Viewer plugin unloaded');
+    console.debug('Supernote Viewer plugin unloaded');
   }
 
   private async loadPluginData(): Promise<void> {

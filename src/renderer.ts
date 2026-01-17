@@ -3,7 +3,7 @@
  * Decodes RLE bitmap data and renders to canvas/image
  */
 
-import { SupernoteFile, SupernotePage, SupernoteLayer } from './parser';
+import { SupernoteFile, SupernoteLayer } from './parser';
 
 // Color palette for RLE decoding
 const ENCODED_COLORS: Record<number, [number, number, number, number]> = {
